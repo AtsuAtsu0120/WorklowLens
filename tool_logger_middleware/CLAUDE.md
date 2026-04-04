@@ -23,6 +23,10 @@ internal/
 Document/                       仕様書 (SDD: 仕様書駆動設計)
 ```
 
+## 仕様書駆動設計 (SDD)
+
+ルートの `CLAUDE.md` を参照。機能の実装・修正前に必ず `Document/features/` の該当仕様書を確認すること。
+
 ## コーディング規約
 
 - `gofmt` + `go vet` 準拠

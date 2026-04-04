@@ -1,34 +1,35 @@
-# tool_logger
+# tool_logger_middleware
 
-ツール利用のログを記録するRustプロジェクト。
+ゲーム開発ツール（Unity, Maya等）のログをUDPで受信するローカル中継サーバー。
 
-## ビルド・実行
+## ビルド・テスト
 
 ```bash
-cargo build          # ビルド
-cargo run            # 実行
-cargo test           # テスト実行
-cargo clippy         # lint
-cargo fmt            # フォーマット
+go build ./cmd/middleware      # ビルド
+go run ./cmd/middleware        # 実行（デフォルト: 59100）
+go run ./cmd/middleware 59200  # ポート指定
+go test ./...                  # 全テスト
+go vet ./...                   # 静的解析
 ```
 
 ## プロジェクト構成
 
-- `src/main.rs` — エントリポイント
-- Rust Edition: 2024
+```
+cmd/middleware/main.go          エントリポイント
+internal/
+  model/log_message.go          LogMessage, Parse(), ValidateEventType()
+  server/server.go              UDPサーバー (ReadFromループ, graceful shutdown)
+  lock/instance_lock.go         多重起動防止 (TCPポートバインド方式)
+Document/                       仕様書 (SDD: 仕様書駆動設計)
+```
 
 ## コーディング規約
 
-- `cargo fmt` のデフォルト設定に従う
-- `cargo clippy` の警告をすべて解消する
-- コメントやドキュメントは日本語で記述する
-- テストコードはteste/以下に記載してください
+- `gofmt` + `go vet` 準拠
+- コメント・ドキュメントは日本語
+- 外部依存なし（標準ライブラリのみ）
+- テストは各パッケージ内の `_test.go` に配置
 
 ## ユーザーコンテキスト
 
-このプロジェクトのユーザーはC#に精通しているがRustは初心者である。コード説明時は以下を意識すること:
-
-- C#との対比で説明すると理解しやすい（例: `trait` = C#の`interface`、`enum` = C#の判別共用体に近い、`Result<T,E>` = 例外の代わり、`Option<T>` = `Nullable<T>`に近い）
-- 所有権・借用・ライフタイムなどRust固有の概念は丁寧に補足する
-- `unsafe`、マクロ、高度なジェネリクスなどは必要最小限に留め、初学者でも読みやすいコードを優先する
-- このプロジェクトを進めつつRustの学習も深めたいので、細かい単位でいろいろ教えて
+C#に精通、Goもある程度わかる。冗長な言語基礎の説明は不要。

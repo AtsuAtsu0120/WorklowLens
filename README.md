@@ -149,3 +149,67 @@ go vet ./...                 # 静的解析
 
 - middleware: [tool_logger_middleware/Document/](./tool_logger_middleware/Document/)
 - server: [tool_logger_server/Document/](./tool_logger_server/Document/)
+
+## セットアップ
+
+### 前提条件
+
+- Go 1.24 以上
+
+### 1. リポジトリのクローン
+
+```bash
+git clone https://github.com/AtsuAtsu0120/ToolLogger.git
+cd ToolLogger
+```
+
+### 2. PostgreSQL（Supabase）のセットアップ
+
+[Supabase](https://supabase.com/) でプロジェ��トを作成し、SQL Editorで以下を実行してテーブルとインデックスを作成する。
+
+```sql
+CREATE TABLE logs (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tool_name    TEXT        NOT NULL,
+    event_type   TEXT        NOT NULL,
+    timestamp    TIMESTAMPTZ NOT NULL,
+    message      TEXT        NOT NULL,
+    session_id   TEXT,
+    tool_version TEXT,
+    details      JSONB,
+    received_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_logs_tool_name  ON logs (tool_name);
+CREATE INDEX idx_logs_event_type ON logs (event_type);
+CREATE INDEX idx_logs_timestamp  ON logs (timestamp);
+CREATE INDEX idx_logs_session_id ON logs (session_id);
+```
+
+接続文字列はSupabaseダッシュボードの **Settings > Database > Connection string > URI** から取得できる。
+
+### 3. tool_logger_server のデプロイ
+
+```bash
+cd tool_logger_server
+go build -o server ./cmd/server
+
+# ローカルで動作確認
+DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require" ./server
+```
+
+Cloud Runへのデプロイ時は `DATABASE_URL` をシークレットとして設定する。
+
+### 4. tool_logger_middleware のビルド
+
+```bash
+cd tool_logger_middleware
+go build -o middleware ./cmd/middleware
+```
+
+ビルドしたバイナリをゲーム開発ツールのプロジェクトに配置する。
+配置例やクライアント実装については [tool_logger_middleware/README.md](./tool_logger_middleware/README.md) を参照。
+
+### 5. Grafana Cloud の接続（任意）
+
+[Grafana Cloud](https://grafana.com/products/cloud/) でアカウントを作成し、データソースにSupabaseのPostgreSQLを追加する。`logs` テーブルに対してSQLクエリでダッシュボードを構築できる。

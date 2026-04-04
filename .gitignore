@@ -1,5 +1,6 @@
 # Go
 **/middleware
+**/server
 **/.gopath/
 
 # Rust (legacy)

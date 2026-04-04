@@ -39,7 +39,7 @@ tool_logger_middleware はローカルでUDPログを受信してバッファリ
 
 ```go
 // LogMessage はmiddlewareから受信するログメッセージ。
-// middleware側のRust LogMessage構造体と同じフィールドを持つ。
+// middleware側のLogMessage構造体と同じフィールドを持つ。
 type LogMessage struct {
     ToolName    string          `json:"tool_name"`
     EventType   string          `json:"event_type"`
@@ -53,13 +53,13 @@ type LogMessage struct {
 
 **middleware側との対応**:
 
-| middleware (Rust) | server (Go) | 備考 |
-|-------------------|-------------|------|
-| `String` | `string` | |
-| `EventType` (enum) | `string` + バリデーション | Goにはenumがないため文字列で受けてバリデーション |
-| `DateTime<Utc>` | `time.Time` | `encoding/json` がISO 8601を自動パース |
-| `Option<String>` | `*string` | nilで省略を表現 |
-| `Option<serde_json::Value>` | `json.RawMessage` | パースせず生JSONのまま保持 |
+| middleware (Go) | server (Go) | 備考 |
+|-----------------|-------------|------|
+| `string` | `string` | |
+| `string` + バリデーション | `string` + バリデーション | 許可値はmap[string]boolで定義 |
+| `time.Time` | `time.Time` | `encoding/json` がISO 8601を自動パース |
+| `*string` | `*string` | nilで省略を表現 |
+| `json.RawMessage` | `json.RawMessage` | パースせず生JSONのまま保持 |
 
 ### 公開API
 

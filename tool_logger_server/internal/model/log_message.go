@@ -16,7 +16,7 @@ var validEventTypes = map[string]bool{
 }
 
 // LogMessage はmiddlewareから受信するログメ���セージ。
-// middleware側のRust LogMessage構造体と同じフィールドを持��。
+// middleware側のLogMessage構造体と同じフィールドを持��。
 type LogMessage struct {
 	ToolName    string          `json:"tool_name"`
 	EventType   string          `json:"event_type"`

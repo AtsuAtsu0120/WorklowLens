@@ -1,6 +1,6 @@
-# Go
-**/middleware
-**/server
+# Go ビルド成果物（バイナリ）
+/tool_logger_middleware/middleware
+/tool_logger_server/server
 **/.gopath/
 
 # Rust (legacy)

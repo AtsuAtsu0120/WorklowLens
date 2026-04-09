@@ -1,6 +1,6 @@
-# tool_logger
+# WorkflowLens - Analytics for Game Development Tools
 
-ゲーム開発ツール（Unity、Maya等）の利用ログ・エラーログを収集・蓄積するシステムです。
+ゲーム開発ツール（Unity、Maya等）の利用ログ・エラーログを収集・蓄積しそれを分析することでワークフローを最適化していくシステムです。
 ローカルの中継サーバー（middleware）がツールからUDPでログを受信し、オンラインサーバーへHTTPで転送、PostgreSQLに保存します。
 
 ## システム構成

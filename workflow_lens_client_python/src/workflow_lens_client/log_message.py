@@ -7,27 +7,31 @@ from typing import Any, Dict, Optional
 
 def build_json(
     tool_name: str,
-    event_type: str,
-    message: str,
+    category: str,
+    action: str,
     session_id: str,
     tool_version: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None,
+    duration_ms: Optional[int] = None,
     traceparent: Optional[str] = None,
 ) -> str:
     """ログメッセージのJSON文字列を生成する。"""
     payload: Dict[str, Any] = {
         "tool_name": tool_name,
-        "event_type": event_type,
+        "category": category,
+        "action": action,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "message": message,
         "session_id": session_id,
     }
 
     if tool_version is not None:
         payload["tool_version"] = tool_version
 
-    if details is not None:
-        payload["details"] = details
+    if user_id is not None:
+        payload["user_id"] = user_id
+
+    if duration_ms is not None:
+        payload["duration_ms"] = duration_ms
 
     if traceparent is not None:
         payload["traceparent"] = traceparent

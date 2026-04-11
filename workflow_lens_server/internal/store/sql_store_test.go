@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -64,9 +63,9 @@ func TestInsertLogs_SingleLog(t *testing.T) {
 	logs := []model.LogMessage{
 		{
 			ToolName:  "TestTool",
-			EventType: "usage",
+			Category:  "edit",
 			Timestamp: ts,
-			Message:   "hello",
+			Action:    "hello",
 		},
 	}
 
@@ -79,13 +78,13 @@ func TestInsertLogs_SingleLog(t *testing.T) {
 	}
 
 	// DBから取得して検証
-	var toolName, eventType, message string
-	err = s.db.QueryRow("SELECT tool_name, event_type, message FROM logs").Scan(&toolName, &eventType, &message)
+	var toolName, category, action string
+	err = s.db.QueryRow("SELECT tool_name, category, action FROM logs").Scan(&toolName, &category, &action)
 	if err != nil {
 		t.Fatalf("SELECT failed: %v", err)
 	}
-	if toolName != "TestTool" || eventType != "usage" || message != "hello" {
-		t.Errorf("unexpected values: tool_name=%q event_type=%q message=%q", toolName, eventType, message)
+	if toolName != "TestTool" || category != "edit" || action != "hello" {
+		t.Errorf("unexpected values: tool_name=%q category=%q action=%q", toolName, category, action)
 	}
 }
 
@@ -95,18 +94,20 @@ func TestInsertLogs_WithOptionalFields(t *testing.T) {
 
 	sessionID := "abc123"
 	toolVersion := "1.0.0"
-	details := json.RawMessage(`{"feature":"paint"}`)
+	userID := "user-42"
+	var durationMs int64 = 1500
 	ts := time.Date(2026, 4, 4, 10, 0, 0, 0, time.UTC)
 
 	logs := []model.LogMessage{
 		{
 			ToolName:    "TestTool",
-			EventType:   "session_start",
+			Category:    "session",
 			Timestamp:   ts,
-			Message:     "started",
+			Action:      "start",
 			SessionID:   &sessionID,
 			ToolVersion: &toolVersion,
-			Details:     details,
+			UserID:      &userID,
+			DurationMs:  &durationMs,
 		},
 	}
 
@@ -118,8 +119,9 @@ func TestInsertLogs_WithOptionalFields(t *testing.T) {
 		t.Errorf("expected 1, got %d", count)
 	}
 
-	var sid, ver, det sql.NullString
-	err = s.db.QueryRow("SELECT session_id, tool_version, details FROM logs").Scan(&sid, &ver, &det)
+	var sid, ver, uid sql.NullString
+	var dur sql.NullInt64
+	err = s.db.QueryRow("SELECT session_id, tool_version, user_id, duration_ms FROM logs").Scan(&sid, &ver, &uid, &dur)
 	if err != nil {
 		t.Fatalf("SELECT failed: %v", err)
 	}
@@ -129,8 +131,11 @@ func TestInsertLogs_WithOptionalFields(t *testing.T) {
 	if !ver.Valid || ver.String != "1.0.0" {
 		t.Errorf("expected tool_version '1.0.0', got %v", ver)
 	}
-	if !det.Valid || det.String != `{"feature":"paint"}` {
-		t.Errorf("expected details, got %v", det)
+	if !uid.Valid || uid.String != "user-42" {
+		t.Errorf("expected user_id 'user-42', got %v", uid)
+	}
+	if !dur.Valid || dur.Int64 != 1500 {
+		t.Errorf("expected duration_ms 1500, got %v", dur)
 	}
 }
 
@@ -142,9 +147,9 @@ func TestInsertLogs_NilOptionalFields(t *testing.T) {
 	logs := []model.LogMessage{
 		{
 			ToolName:  "TestTool",
-			EventType: "usage",
+			Category:  "edit",
 			Timestamp: ts,
-			Message:   "hello",
+			Action:    "hello",
 		},
 	}
 
@@ -153,8 +158,9 @@ func TestInsertLogs_NilOptionalFields(t *testing.T) {
 		t.Fatalf("InsertLogs failed: %v", err)
 	}
 
-	var sid, ver, det sql.NullString
-	err = s.db.QueryRow("SELECT session_id, tool_version, details FROM logs").Scan(&sid, &ver, &det)
+	var sid, ver, uid sql.NullString
+	var dur sql.NullInt64
+	err = s.db.QueryRow("SELECT session_id, tool_version, user_id, duration_ms FROM logs").Scan(&sid, &ver, &uid, &dur)
 	if err != nil {
 		t.Fatalf("SELECT failed: %v", err)
 	}
@@ -164,8 +170,11 @@ func TestInsertLogs_NilOptionalFields(t *testing.T) {
 	if ver.Valid {
 		t.Error("expected tool_version to be NULL")
 	}
-	if det.Valid {
-		t.Error("expected details to be NULL")
+	if uid.Valid {
+		t.Error("expected user_id to be NULL")
+	}
+	if dur.Valid {
+		t.Error("expected duration_ms to be NULL")
 	}
 }
 
@@ -178,9 +187,9 @@ func TestInsertLogs_MultipleLogs(t *testing.T) {
 	for i := range logs {
 		logs[i] = model.LogMessage{
 			ToolName:  "TestTool",
-			EventType: "usage",
+			Category:  "edit",
 			Timestamp: ts,
-			Message:   "msg",
+			Action:    "msg",
 		}
 	}
 

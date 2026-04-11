@@ -39,7 +39,7 @@ func HandlePostLogs(s store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		// ボディサイズ制限
+		// ボディサイズ���限
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 
 		// リクエストパース
@@ -103,17 +103,18 @@ func HandlePostLogs(s store.Store) http.HandlerFunc {
 			eventsTotal.Add(ctx, 1,
 				metric.WithAttributes(
 					attribute.String("tool_name", log.ToolName),
-					attribute.String("event_type", log.EventType),
+					attribute.String("category", log.Category),
+					attribute.String("action", log.Action),
 				))
 
-			switch log.EventType {
-			case "session_start":
+			if log.Category == "session" && log.Action == "start" {
 				sessionsStarted.Add(ctx, 1,
 					metric.WithAttributes(
 						attribute.String("tool_name", log.ToolName),
 						attribute.String("tool_version", toolVersion),
 					))
-			case "session_end":
+			}
+			if log.Category == "session" && log.Action == "end" {
 				sessionsEnded.Add(ctx, 1,
 					metric.WithAttributes(
 						attribute.String("tool_name", log.ToolName),

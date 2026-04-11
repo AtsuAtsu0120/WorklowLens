@@ -9,19 +9,20 @@ namespace WorkflowLensClient
         /// <summary>ログメッセージのJSON文字列を生成する。</summary>
         internal static string BuildJson(
             string toolName,
-            string eventType,
-            string message,
+            string category,
+            string action,
             string? sessionId,
             string? toolVersion,
-            string? details,
+            string? userId,
+            long? durationMs,
             string? traceparent = null)
         {
             var sb = new StringBuilder(256);
             sb.Append('{');
             sb.Append("\"tool_name\":").Append(JsonEscape(toolName));
-            sb.Append(",\"event_type\":").Append(JsonEscape(eventType));
+            sb.Append(",\"category\":").Append(JsonEscape(category));
+            sb.Append(",\"action\":").Append(JsonEscape(action));
             sb.Append(",\"timestamp\":").Append(JsonEscape(DateTime.UtcNow.ToString("o")));
-            sb.Append(",\"message\":").Append(JsonEscape(message));
 
             if (sessionId != null)
             {
@@ -33,10 +34,14 @@ namespace WorkflowLensClient
                 sb.Append(",\"tool_version\":").Append(JsonEscape(toolVersion));
             }
 
-            if (details != null)
+            if (userId != null)
             {
-                // detailsは生JSON文字列なのでエスケープせずそのまま埋め込む
-                sb.Append(",\"details\":").Append(details);
+                sb.Append(",\"user_id\":").Append(JsonEscape(userId));
+            }
+
+            if (durationMs != null)
+            {
+                sb.Append(",\"duration_ms\":").Append(durationMs.Value);
             }
 
             if (traceparent != null)

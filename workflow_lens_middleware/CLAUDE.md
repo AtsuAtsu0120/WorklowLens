@@ -17,7 +17,7 @@ go vet ./...                   # 静的解析
 ```
 cmd/middleware/main.go          エントリポイント
 internal/
-  model/log_message.go          LogMessage, Parse(), ValidateEventType()
+  model/log_message.go          LogMessage, Parse(), ValidateCategory()
   server/server.go              UDPサーバー (ReadFromループ, graceful shutdown)
   forwarder/forwarder.go        HTTPバッチ転送 (バッファリング, 定期フラッシュ)
   lock/instance_lock.go         多重起動防止 (TCPポートバインド方式)

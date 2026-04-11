@@ -6,18 +6,18 @@ import (
 	"time"
 )
 
-func TestValidateEventType(t *testing.T) {
-	valid := []string{"usage", "error", "session_start", "session_end", "cancellation"}
-	for _, et := range valid {
-		if !ValidateEventType(et) {
-			t.Errorf("expected %q to be valid", et)
+func TestValidateCategory(t *testing.T) {
+	valid := []string{"asset", "build", "edit", "error", "session"}
+	for _, c := range valid {
+		if !ValidateCategory(c) {
+			t.Errorf("expected %q to be valid", c)
 		}
 	}
 
-	invalid := []string{"unknown", "start", "end", "", "Usage"}
-	for _, et := range invalid {
-		if ValidateEventType(et) {
-			t.Errorf("expected %q to be invalid", et)
+	invalid := []string{"unknown", "usage", "", "Asset", "SESSION"}
+	for _, c := range invalid {
+		if ValidateCategory(c) {
+			t.Errorf("expected %q to be invalid", c)
 		}
 	}
 }
@@ -26,15 +26,15 @@ func TestValidateLogs_Valid(t *testing.T) {
 	logs := []LogMessage{
 		{
 			ToolName:  "TestTool",
-			EventType: "usage",
+			Category:  "edit",
+			Action:    "brush_apply",
 			Timestamp: time.Now(),
-			Message:   "hello",
 		},
 		{
 			ToolName:  "TestTool",
-			EventType: "session_start",
+			Category:  "session",
+			Action:    "start",
 			Timestamp: time.Now(),
-			Message:   "started",
 		},
 	}
 	if err := ValidateLogs(logs); err != nil {
@@ -50,7 +50,7 @@ func TestValidateLogs_Empty(t *testing.T) {
 
 func TestValidateLogs_MissingToolName(t *testing.T) {
 	logs := []LogMessage{
-		{EventType: "usage", Timestamp: time.Now(), Message: "hello"},
+		{Category: "edit", Action: "brush_apply", Timestamp: time.Now()},
 	}
 	err := ValidateLogs(logs)
 	if err == nil {
@@ -62,33 +62,43 @@ func TestValidateLogs_MissingToolName(t *testing.T) {
 	}
 }
 
-func TestValidateLogs_MissingEventType(t *testing.T) {
+func TestValidateLogs_MissingCategory(t *testing.T) {
 	logs := []LogMessage{
-		{ToolName: "TestTool", Timestamp: time.Now(), Message: "hello"},
+		{ToolName: "TestTool", Action: "brush_apply", Timestamp: time.Now()},
 	}
 	err := ValidateLogs(logs)
 	if err == nil {
-		t.Fatal("expected error for missing event_type")
+		t.Fatal("expected error for missing category")
 	}
 }
 
-func TestValidateLogs_InvalidEventType(t *testing.T) {
+func TestValidateLogs_InvalidCategory(t *testing.T) {
 	logs := []LogMessage{
-		{ToolName: "TestTool", EventType: "unknown", Timestamp: time.Now(), Message: "hello"},
+		{ToolName: "TestTool", Category: "unknown", Action: "brush_apply", Timestamp: time.Now()},
 	}
 	err := ValidateLogs(logs)
 	if err == nil {
-		t.Fatal("expected error for invalid event_type")
+		t.Fatal("expected error for invalid category")
 	}
-	expected := "invalid event_type: 'unknown' at index 0"
+	expected := "invalid category: 'unknown' at index 0"
 	if err.Error() != expected {
 		t.Errorf("expected %q, got %q", expected, err.Error())
 	}
 }
 
+func TestValidateLogs_MissingAction(t *testing.T) {
+	logs := []LogMessage{
+		{ToolName: "TestTool", Category: "edit", Timestamp: time.Now()},
+	}
+	err := ValidateLogs(logs)
+	if err == nil {
+		t.Fatal("expected error for missing action")
+	}
+}
+
 func TestValidateLogs_MissingTimestamp(t *testing.T) {
 	logs := []LogMessage{
-		{ToolName: "TestTool", EventType: "usage", Message: "hello"},
+		{ToolName: "TestTool", Category: "edit", Action: "brush_apply"},
 	}
 	err := ValidateLogs(logs)
 	if err == nil {
@@ -96,20 +106,10 @@ func TestValidateLogs_MissingTimestamp(t *testing.T) {
 	}
 }
 
-func TestValidateLogs_MissingMessage(t *testing.T) {
-	logs := []LogMessage{
-		{ToolName: "TestTool", EventType: "usage", Timestamp: time.Now()},
-	}
-	err := ValidateLogs(logs)
-	if err == nil {
-		t.Fatal("expected error for missing message")
-	}
-}
-
 func TestValidateLogs_ErrorAtSecondIndex(t *testing.T) {
 	logs := []LogMessage{
-		{ToolName: "TestTool", EventType: "usage", Timestamp: time.Now(), Message: "ok"},
-		{ToolName: "", EventType: "usage", Timestamp: time.Now(), Message: "bad"},
+		{ToolName: "TestTool", Category: "edit", Action: "brush_apply", Timestamp: time.Now()},
+		{ToolName: "", Category: "edit", Action: "brush_apply", Timestamp: time.Now()},
 	}
 	err := ValidateLogs(logs)
 	if err == nil {
@@ -124,12 +124,13 @@ func TestValidateLogs_ErrorAtSecondIndex(t *testing.T) {
 func TestLogMessage_JSONUnmarshal(t *testing.T) {
 	input := `{
 		"tool_name": "UnityTool",
-		"event_type": "usage",
+		"category": "edit",
+		"action": "brush_apply",
 		"timestamp": "2026-04-04T10:00:00Z",
-		"message": "hello",
 		"session_id": "abc123",
 		"tool_version": "1.0.0",
-		"details": {"feature": "paint"}
+		"user_id": "tanaka",
+		"duration_ms": 120
 	}`
 
 	var msg LogMessage
@@ -140,8 +141,11 @@ func TestLogMessage_JSONUnmarshal(t *testing.T) {
 	if msg.ToolName != "UnityTool" {
 		t.Errorf("expected ToolName 'UnityTool', got %q", msg.ToolName)
 	}
-	if msg.EventType != "usage" {
-		t.Errorf("expected EventType 'usage', got %q", msg.EventType)
+	if msg.Category != "edit" {
+		t.Errorf("expected Category 'edit', got %q", msg.Category)
+	}
+	if msg.Action != "brush_apply" {
+		t.Errorf("expected Action 'brush_apply', got %q", msg.Action)
 	}
 	if msg.SessionID == nil || *msg.SessionID != "abc123" {
 		t.Errorf("expected SessionID 'abc123', got %v", msg.SessionID)
@@ -149,17 +153,20 @@ func TestLogMessage_JSONUnmarshal(t *testing.T) {
 	if msg.ToolVersion == nil || *msg.ToolVersion != "1.0.0" {
 		t.Errorf("expected ToolVersion '1.0.0', got %v", msg.ToolVersion)
 	}
-	if msg.Details == nil {
-		t.Error("expected Details to be non-nil")
+	if msg.UserID == nil || *msg.UserID != "tanaka" {
+		t.Errorf("expected UserID 'tanaka', got %v", msg.UserID)
+	}
+	if msg.DurationMs == nil || *msg.DurationMs != 120 {
+		t.Errorf("expected DurationMs 120, got %v", msg.DurationMs)
 	}
 }
 
 func TestLogMessage_JSONUnmarshal_OptionalFieldsOmitted(t *testing.T) {
 	input := `{
 		"tool_name": "MayaTool",
-		"event_type": "error",
-		"timestamp": "2026-04-04T10:00:00Z",
-		"message": "something failed"
+		"category": "error",
+		"action": "shader_compile",
+		"timestamp": "2026-04-04T10:00:00Z"
 	}`
 
 	var msg LogMessage
@@ -173,7 +180,10 @@ func TestLogMessage_JSONUnmarshal_OptionalFieldsOmitted(t *testing.T) {
 	if msg.ToolVersion != nil {
 		t.Errorf("expected ToolVersion nil, got %v", msg.ToolVersion)
 	}
-	if msg.Details != nil {
-		t.Errorf("expected Details nil, got %v", msg.Details)
+	if msg.UserID != nil {
+		t.Errorf("expected UserID nil, got %v", msg.UserID)
+	}
+	if msg.DurationMs != nil {
+		t.Errorf("expected DurationMs nil, got %v", msg.DurationMs)
 	}
 }

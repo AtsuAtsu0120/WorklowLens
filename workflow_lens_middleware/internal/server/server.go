@@ -115,7 +115,8 @@ func processDatagram(
 			attribute.String("net.transport", "udp"),
 			attribute.String("net.peer.ip", src.String()),
 			attribute.String("tool.name", msg.ToolName),
-			attribute.String("event.type", msg.EventType),
+			attribute.String("category", msg.Category),
+			attribute.String("action", msg.Action),
 			attribute.Int("messaging.message.payload_size_bytes", len(data)),
 		),
 	)
@@ -127,9 +128,9 @@ func processDatagram(
 
 	slog.Info("メッセージ受信",
 		"tool_name", msg.ToolName,
-		"event_type", msg.EventType,
+		"category", msg.Category,
+		"action", msg.Action,
 		"timestamp", msg.Timestamp,
-		"message", msg.Message,
 		"src", src.String(),
 	)
 

@@ -16,7 +16,7 @@ dotnet pack               # NuGetパッケージ作成
 src/WorkflowLensClient/
   WorkflowLens.cs             メインクラス（UdpClient, IDisposable）
   LogMessage.cs             JSONペイロード組み立て
-  EventType.cs              イベント種別定数
+  Category.cs               カテゴリenum定義
 tests/WorkflowLensClient.Tests/
   LogMessageTests.cs        JSON組み立てのユニットテスト
   WorkflowLensTests.cs        UDP送信の結合テスト・セッションテスト

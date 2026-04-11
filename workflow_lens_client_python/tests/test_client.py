@@ -2,10 +2,11 @@
 
 import json
 import socket
+import time
 
 import pytest
 
-from workflow_lens_client import WorkflowLens
+from workflow_lens_client import Category, WorkflowLens
 
 
 def _get_free_port() -> int:
@@ -21,7 +22,7 @@ def _receive_one(sock: socket.socket) -> dict:
     return json.loads(data.decode("utf-8"))
 
 
-class TestSend:
+class TestLog:
     def test_UDPで正しいJSONが届く(self):
         port = _get_free_port()
         receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -30,19 +31,20 @@ class TestSend:
 
         try:
             logger = WorkflowLens("test_tool", "1.0.0", port=port, auto_start_middleware=False)
-            logger.log_usage("ボタン押下")
+            logger.log(Category.EDIT, "brush_apply")
 
             result = _receive_one(receiver)
             assert result["tool_name"] == "test_tool"
-            assert result["event_type"] == "usage"
-            assert result["message"] == "ボタン押下"
+            assert result["category"] == "edit"
+            assert result["action"] == "brush_apply"
             assert result["tool_version"] == "1.0.0"
             assert "session_id" in result
+            assert "user_id" in result
             logger.close()
         finally:
             receiver.close()
 
-    def test_detailsが正しく埋め込まれる(self):
+    def test_durationMsが正しく設定される(self):
         port = _get_free_port()
         receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         receiver.bind(("127.0.0.1", port))
@@ -50,24 +52,59 @@ class TestSend:
 
         try:
             logger = WorkflowLens("test_tool", port=port, auto_start_middleware=False)
-            logger.log_usage("操作", {"action": "click", "target": "button_a"})
+            logger.log(Category.BUILD, "compile", duration_ms=3200)
 
             result = _receive_one(receiver)
-            assert result["details"]["action"] == "click"
-            assert result["details"]["target"] == "button_a"
+            assert result["duration_ms"] == 3200
             logger.close()
         finally:
             receiver.close()
 
     def test_middleware未起動でも例外を投げない(self):
         logger = WorkflowLens("test_tool", port=59199, auto_start_middleware=False)
-        logger.log_usage("テスト")  # 例外が発生しないこと
+        logger.log(Category.EDIT, "test")
         logger.close()
 
     def test_close後でも例外を投げない(self):
         logger = WorkflowLens("test_tool", port=59199, auto_start_middleware=False)
         logger.close()
-        logger.log_usage("テスト")  # 例外が発生しないこと
+        logger.log(Category.EDIT, "test")
+
+    def test_measureでduration_msが自動設定される(self):
+        port = _get_free_port()
+        receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        receiver.bind(("127.0.0.1", port))
+        receiver.settimeout(3)
+
+        try:
+            logger = WorkflowLens("test_tool", port=port, auto_start_middleware=False)
+            with logger.measure(Category.BUILD, "compile"):
+                time.sleep(0.05)
+
+            result = _receive_one(receiver)
+            assert result["category"] == "build"
+            assert result["action"] == "compile"
+            assert result["duration_ms"] >= 40
+            logger.close()
+        finally:
+            receiver.close()
+
+    def test_userId未指定時にOSユーザー名が自動設定される(self):
+        port = _get_free_port()
+        receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        receiver.bind(("127.0.0.1", port))
+        receiver.settimeout(3)
+
+        try:
+            logger = WorkflowLens("test_tool", port=port, auto_start_middleware=False)
+            logger.log(Category.EDIT, "test")
+
+            result = _receive_one(receiver)
+            assert result["user_id"] is not None
+            assert len(result["user_id"]) > 0
+            logger.close()
+        finally:
+            receiver.close()
 
 
 class TestSession:
@@ -77,7 +114,7 @@ class TestSession:
         assert len(logger.session_id) == 8
         logger.close()
 
-    def test_start_sessionでsession_startが送信される(self):
+    def test_session_startログが送信される(self):
         port = _get_free_port()
         receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         receiver.bind(("127.0.0.1", port))
@@ -85,23 +122,16 @@ class TestSession:
 
         try:
             logger = WorkflowLens("test_tool", port=port, auto_start_middleware=False)
-            logger.start_session()
+            logger.log(Category.SESSION, "start")
 
             result = _receive_one(receiver)
-            assert result["event_type"] == "session_start"
+            assert result["category"] == "session"
+            assert result["action"] == "start"
             logger.close()
         finally:
             receiver.close()
 
-    def test_start_sessionで新しいsession_idが生成される(self):
-        logger = WorkflowLens("test_tool", port=59199, auto_start_middleware=False)
-        first = logger.session_id
-        logger.start_session()
-        second = logger.session_id
-        assert first != second
-        logger.close()
-
-    def test_end_sessionでsession_endが送信される(self):
+    def test_session_endログが送信される(self):
         port = _get_free_port()
         receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         receiver.bind(("127.0.0.1", port))
@@ -109,10 +139,11 @@ class TestSession:
 
         try:
             logger = WorkflowLens("test_tool", port=port, auto_start_middleware=False)
-            logger.end_session()
+            logger.log(Category.SESSION, "end")
 
             result = _receive_one(receiver)
-            assert result["event_type"] == "session_end"
+            assert result["category"] == "session"
+            assert result["action"] == "end"
             logger.close()
         finally:
             receiver.close()
@@ -126,7 +157,7 @@ class TestSession:
         try:
             logger = WorkflowLens("test_tool", port=port, auto_start_middleware=False)
             expected_id = logger.session_id
-            logger.log_usage("テスト")
+            logger.log(Category.EDIT, "test")
 
             result = _receive_one(receiver)
             assert result["session_id"] == expected_id
@@ -142,16 +173,19 @@ class TestSession:
 
         try:
             with WorkflowLens("test_tool", port=port, auto_start_middleware=False) as logger:
-                logger.log_usage("操作")
+                logger.log(Category.EDIT, "brush_apply")
 
-            # session_start, usage, session_end の3メッセージが届く
+            # session/start, edit/brush_apply, session/end の3メッセージが届く
             msg1 = _receive_one(receiver)
             msg2 = _receive_one(receiver)
             msg3 = _receive_one(receiver)
 
-            assert msg1["event_type"] == "session_start"
-            assert msg2["event_type"] == "usage"
-            assert msg3["event_type"] == "session_end"
+            assert msg1["category"] == "session"
+            assert msg1["action"] == "start"
+            assert msg2["category"] == "edit"
+            assert msg2["action"] == "brush_apply"
+            assert msg3["category"] == "session"
+            assert msg3["action"] == "end"
         finally:
             receiver.close()
 
@@ -174,7 +208,7 @@ class TestMiddlewareProcess:
     def test_close多重呼び出しで例外が出ない(self):
         logger = WorkflowLens("test_tool", port=59199, auto_start_middleware=False)
         logger.close()
-        logger.close()  # 2回目でも例外が出ないこと
+        logger.close()
 
 
 class TestMiddlewareAutoDiscovery:

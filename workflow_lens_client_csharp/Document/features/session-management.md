@@ -3,7 +3,7 @@ title: "セッション管理"
 status: implemented
 priority: medium
 created: 2026-04-04
-updated: 2026-04-04
+updated: 2026-04-11
 related_files:
   - src/WorkflowLensClient/WorkflowLens.cs
 ---
@@ -16,16 +16,14 @@ related_files:
 
 ## 背景・目的
 
-同一セッション内のイベント（開始→操作→エラー→終了）を紐付けることで、セッション時間やクラッシュ検知（session_endがないセッション）が可能になる。
+同一セッション内のイベント（開始→操作→エラー→終了）を紐付けることで、セッション時間やクラッシュ検知（session/endがないセッション）が可能になる。
 
 ## 要件
 
-- [ ] StartSession()でsession_idを自動生成し、session_startイベントを送信
-- [ ] EndSession()でsession_endイベントを送信
-- [ ] session_idはStartSession()呼出しごとに新規生成
-- [ ] session_idはSend()に自動的に付与される
-- [ ] StartSession()を呼ばずにSend()した場合もsession_idが付与される（コンストラクタで初期生成）
-- [ ] SessionIdプロパティで現在のsession_idを参照できる
+- [x] コンストラクタでsession_idを自動生成する
+- [x] session_idは全てのLog()に自動的に付与される
+- [x] SessionIdプロパティで現在のsession_idを参照できる
+- [x] セッション開始/終了は `Log(Category.Session, "start")` / `Log(Category.Session, "end")` で送信する
 
 ## 設計
 
@@ -34,13 +32,11 @@ related_files:
 ```
 コンストラクタ → session_id初期生成
      ↓
-StartSession() → 新しいsession_id生成 + session_startイベント送信
+Log(Category.Session, "start") → セッション開始ログ送信
      ↓
-Send() / LogUsage() / LogError() 等 → 現在のsession_idを自動付与
+Log(Category.Edit, "brush_apply") 等 → 現在のsession_idを自動付与
      ↓
-EndSession() → session_endイベント送信
-     ↓
-（再度StartSession()で新セッション開始可能）
+Log(Category.Session, "end") → セッション終了ログ送信
 ```
 
 ### 公開API
@@ -49,11 +45,10 @@ EndSession() → session_endイベント送信
 public class WorkflowLens
 {
     public string SessionId { get; }
-
-    public void StartSession(string message = "Session started", string? details = null);
-    public void EndSession(string message = "Session ended", string? details = null);
 }
 ```
+
+専用のStartSession()/EndSession()メソッドは廃止し、`Log(Category.Session, "start"/"end")` に統一。APIの表面積を最小限に保つ。
 
 ### session_id生成
 
@@ -61,15 +56,14 @@ public class WorkflowLens
 
 ## テスト方針
 
-- [ ] コンストラクタでsession_idが生成されること
-- [ ] StartSession()でsession_startイベントが送信されること
-- [ ] StartSession()で新しいsession_idが生成されること
-- [ ] EndSession()でsession_endイベントが送信されること
-- [ ] Send()にsession_idが自動付与されること
-- [ ] 2回StartSession()すると異なるsession_idになること
+- [x] コンストラクタでsession_idが生成されること
+- [x] Log(Category.Session, "start")でセッション開始ログが送信されること
+- [x] Log(Category.Session, "end")でセッション終了ログが送信されること
+- [x] Log()にsession_idが自動付与されること
 
 ## 変更履歴
 
 | 日付 | 変更内容 |
 |------|---------|
 | 2026-04-04 | 初版作成 |
+| 2026-04-11 | v2: StartSession/EndSession廃止。Log(Category.Session, "start"/"end")に統一 |

@@ -9,53 +9,53 @@ namespace WorkflowLensClient.Tests
         [Fact]
         public void BuildJson_必須フィールドのみ()
         {
-            var json = LogMessage.BuildJson("my_tool", "usage", "テスト", "abc12345", null, null);
+            var json = LogMessage.BuildJson("my_tool", "edit", "brush_apply", "abc12345", null, null, null);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
             Assert.Equal("my_tool", root.GetProperty("tool_name").GetString());
-            Assert.Equal("usage", root.GetProperty("event_type").GetString());
-            Assert.Equal("テスト", root.GetProperty("message").GetString());
+            Assert.Equal("edit", root.GetProperty("category").GetString());
+            Assert.Equal("brush_apply", root.GetProperty("action").GetString());
             Assert.Equal("abc12345", root.GetProperty("session_id").GetString());
             Assert.True(root.TryGetProperty("timestamp", out var ts));
             // ISO 8601形式であることを確認
             Assert.True(DateTimeOffset.TryParse(ts.GetString(), out _));
-            // tool_version, detailsは省略
+            // オプションフィールドは省略
             Assert.False(root.TryGetProperty("tool_version", out _));
-            Assert.False(root.TryGetProperty("details", out _));
+            Assert.False(root.TryGetProperty("user_id", out _));
+            Assert.False(root.TryGetProperty("duration_ms", out _));
         }
 
         [Fact]
         public void BuildJson_全フィールドあり()
         {
-            var details = "{\"key\":\"value\",\"count\":42}";
-            var json = LogMessage.BuildJson("my_tool", "error", "エラー発生", "abc12345", "1.2.3", details);
+            var json = LogMessage.BuildJson("my_tool", "error", "shader_compile", "abc12345", "1.2.3", "tanaka", 3200);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
             Assert.Equal("my_tool", root.GetProperty("tool_name").GetString());
-            Assert.Equal("error", root.GetProperty("event_type").GetString());
-            Assert.Equal("エラー発生", root.GetProperty("message").GetString());
+            Assert.Equal("error", root.GetProperty("category").GetString());
+            Assert.Equal("shader_compile", root.GetProperty("action").GetString());
             Assert.Equal("abc12345", root.GetProperty("session_id").GetString());
             Assert.Equal("1.2.3", root.GetProperty("tool_version").GetString());
-            Assert.Equal("value", root.GetProperty("details").GetProperty("key").GetString());
-            Assert.Equal(42, root.GetProperty("details").GetProperty("count").GetInt32());
+            Assert.Equal("tanaka", root.GetProperty("user_id").GetString());
+            Assert.Equal(3200, root.GetProperty("duration_ms").GetInt64());
         }
 
         [Fact]
         public void BuildJson_特殊文字のエスケープ()
         {
-            var json = LogMessage.BuildJson("tool", "usage", "行1\n行2\t\"引用\"", "sess", null, null);
+            var json = LogMessage.BuildJson("tool", "edit", "行1\n行2\t\"引用\"", "sess", null, null, null);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            Assert.Equal("行1\n行2\t\"引用\"", root.GetProperty("message").GetString());
+            Assert.Equal("行1\n行2\t\"引用\"", root.GetProperty("action").GetString());
         }
 
         [Fact]
         public void BuildJson_タイムスタンプがISO8601形式()
         {
-            var json = LogMessage.BuildJson("tool", "usage", "msg", "sess", null, null);
+            var json = LogMessage.BuildJson("tool", "edit", "test", "sess", null, null, null);
             using var doc = JsonDocument.Parse(json);
             var ts = doc.RootElement.GetProperty("timestamp").GetString()!;
 

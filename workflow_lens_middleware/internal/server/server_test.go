@@ -58,29 +58,24 @@ func sendDatagram(t *testing.T, addr string, data []byte) {
 	}
 }
 
-func makeUsageJSON(toolName, message string) string {
-	return fmt.Sprintf(`{"tool_name":%q,"event_type":"usage","timestamp":"2026-04-04T10:00:00Z","message":%q}`, toolName, message)
+func makeCategoryJSON(toolName, category, action string) string {
+	return fmt.Sprintf(`{"tool_name":%q,"category":%q,"action":%q,"timestamp":"2026-04-04T10:00:00Z"}`, toolName, category, action)
 }
 
-func makeErrorJSON(toolName, message string) string {
-	return fmt.Sprintf(`{"tool_name":%q,"event_type":"error","timestamp":"2026-04-04T10:00:00Z","message":%q}`, toolName, message)
-}
-
-func makeSessionJSON(toolName, eventType, message, sessionID string) string {
-	return fmt.Sprintf(`{"tool_name":%q,"event_type":%q,"timestamp":"2026-04-04T10:00:00Z","message":%q,"session_id":%q}`, toolName, eventType, message, sessionID)
+func makeSessionCategoryJSON(toolName, action, sessionID string) string {
+	return fmt.Sprintf(`{"tool_name":%q,"category":"session","action":%q,"timestamp":"2026-04-04T10:00:00Z","session_id":%q}`, toolName, action, sessionID)
 }
 
 func TestServer_ValidDatagram(t *testing.T) {
 	addr, _ := startTestServer(t)
-	sendDatagram(t, addr, []byte(makeUsageJSON("TestTool", "test message")))
+	sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "edit", "brush_apply")))
 	time.Sleep(50 * time.Millisecond)
-	// サーバーがパニックしなければ成功
 }
 
 func TestServer_MultipleMessages(t *testing.T) {
 	addr, _ := startTestServer(t)
 	for i := range 5 {
-		sendDatagram(t, addr, []byte(makeUsageJSON("TestTool", fmt.Sprintf("message %d", i))))
+		sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "edit", fmt.Sprintf("action_%d", i))))
 	}
 	time.Sleep(100 * time.Millisecond)
 }
@@ -88,12 +83,10 @@ func TestServer_MultipleMessages(t *testing.T) {
 func TestServer_InvalidJSON(t *testing.T) {
 	addr, _ := startTestServer(t)
 
-	// 不正なJSONを送信
 	sendDatagram(t, addr, []byte(`{invalid json}`))
 	time.Sleep(50 * time.Millisecond)
 
-	// その後の有効なメッセージも処理できる
-	sendDatagram(t, addr, []byte(makeUsageJSON("TestTool", "after invalid")))
+	sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "edit", "after_invalid")))
 	time.Sleep(50 * time.Millisecond)
 }
 
@@ -104,9 +97,9 @@ func TestServer_EmptyDatagram(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestServer_DetailsPayload(t *testing.T) {
+func TestServer_OptionalFields(t *testing.T) {
 	addr, _ := startTestServer(t)
-	data := `{"tool_name":"TestTool","event_type":"usage","timestamp":"2026-04-04T10:00:00Z","message":"test","details":{"brush_size":5,"color":"red"}}`
+	data := `{"tool_name":"TestTool","category":"edit","action":"brush_apply","timestamp":"2026-04-04T10:00:00Z","user_id":"tanaka","duration_ms":120}`
 	sendDatagram(t, addr, []byte(data))
 	time.Sleep(50 * time.Millisecond)
 }
@@ -114,10 +107,9 @@ func TestServer_DetailsPayload(t *testing.T) {
 func TestServer_MultipleClients(t *testing.T) {
 	addr, _ := startTestServer(t)
 
-	// 複数クライアントから送信
 	for i := range 3 {
 		toolName := fmt.Sprintf("Tool%d", i)
-		sendDatagram(t, addr, []byte(makeUsageJSON(toolName, "concurrent message")))
+		sendDatagram(t, addr, []byte(makeCategoryJSON(toolName, "edit", "concurrent")))
 	}
 	time.Sleep(100 * time.Millisecond)
 }
@@ -126,24 +118,17 @@ func TestServer_SessionLifecycle(t *testing.T) {
 	addr, _ := startTestServer(t)
 	sessionID := "test-session-001"
 
-	sendDatagram(t, addr, []byte(makeSessionJSON("TestTool", "session_start", "Tool opened", sessionID)))
+	sendDatagram(t, addr, []byte(makeSessionCategoryJSON("TestTool", "start", sessionID)))
 	time.Sleep(20 * time.Millisecond)
-	sendDatagram(t, addr, []byte(makeSessionJSON("TestTool", "usage", "Feature used", sessionID)))
+	sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "edit", "brush_apply")))
 	time.Sleep(20 * time.Millisecond)
-	sendDatagram(t, addr, []byte(makeSessionJSON("TestTool", "session_end", "Tool closed", sessionID)))
+	sendDatagram(t, addr, []byte(makeSessionCategoryJSON("TestTool", "end", sessionID)))
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestServer_CancellationEvent(t *testing.T) {
+func TestServer_ErrorCategory(t *testing.T) {
 	addr, _ := startTestServer(t)
-	data := `{"tool_name":"TestTool","event_type":"cancellation","timestamp":"2026-04-04T10:00:00Z","message":"Operation cancelled"}`
-	sendDatagram(t, addr, []byte(data))
-	time.Sleep(50 * time.Millisecond)
-}
-
-func TestServer_ErrorEvent(t *testing.T) {
-	addr, _ := startTestServer(t)
-	sendDatagram(t, addr, []byte(makeErrorJSON("TestTool", "NullReferenceException")))
+	sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "error", "shader_compile")))
 	time.Sleep(50 * time.Millisecond)
 }
 
@@ -163,8 +148,7 @@ func TestServer_GracefulShutdown(t *testing.T) {
 	}()
 	time.Sleep(50 * time.Millisecond)
 
-	// メッセージ送信後にシャットダウン
-	sendDatagram(t, addr, []byte(makeUsageJSON("TestTool", "before shutdown")))
+	sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "edit", "before_shutdown")))
 	time.Sleep(50 * time.Millisecond)
 
 	cancel()
@@ -181,11 +165,9 @@ func TestServer_GracefulShutdown(t *testing.T) {
 
 func TestServer_InvalidUTF8(t *testing.T) {
 	addr, _ := startTestServer(t)
-	// 不正なUTF-8バイト列を送信
 	sendDatagram(t, addr, []byte{0xff, 0xfe, 0xfd})
 	time.Sleep(50 * time.Millisecond)
 
-	// その後の有効なメッセージも処理できる
-	sendDatagram(t, addr, []byte(makeUsageJSON("TestTool", "after invalid utf8")))
+	sendDatagram(t, addr, []byte(makeCategoryJSON("TestTool", "edit", "after_invalid_utf8")))
 	time.Sleep(50 * time.Millisecond)
 }

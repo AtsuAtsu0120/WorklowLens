@@ -24,9 +24,9 @@ workflow_lens_middlewareへUDPでログを送信するC#クライアントライ
 
 | ファイル | 役割 |
 |---------|------|
-| `src/WorkflowLensClient/WorkflowLens.cs` | メインクラス。UdpClientでJSON送信 |
+| `src/WorkflowLensClient/WorkflowLens.cs` | メインクラス。UdpClientでJSON送信、MeasureScope |
 | `src/WorkflowLensClient/LogMessage.cs` | JSONペイロードの組み立て |
-| `src/WorkflowLensClient/EventType.cs` | イベント種別の定数定義 |
+| `src/WorkflowLensClient/Category.cs` | カテゴリenum定義 |
 
 ## 設計判断
 
@@ -34,11 +34,11 @@ workflow_lens_middlewareへUDPでログを送信するC#クライアントライ
 |------|------|------|
 | ターゲット | .NET Standard 2.1 | Unity 2021.2+対応。Nullable参照型が使える |
 | middleware探索 | PATH → 環境変数 → 明示パス | 開発者がバイナリパスを管理する手間を削減 |
-| details型 | `string`（生JSON） | System.Text.Json非依存。呼び出し側が好きなシリアライザを使える |
 | JSON組み立て | 文字列補間 | 固定構造なのでシリアライザ不要。外部依存ゼロ |
 | スレッドセーフ | ロック不要 | UdpClient.Send()自体がスレッドセーフ |
 | エラーハンドリング | サイレントキャッチ | ログ送信がツール本体を壊してはならない |
 | session_id | Guid先頭8文字 | 短くて実用上十分 |
+| user_id | デフォルトでEnvironment.UserName | ツール制作者の追加負担ゼロ |
 
 ## 機能仕様インデックス
 

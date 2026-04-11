@@ -12,11 +12,11 @@
 │ Unity (C#)  │     │                  │     │              │
 │ Maya (Python)│──UDP──▶  workflow_lens  │──HTTP──▶ オンライン   │
 │ 他ツール     │     │  (このプロジェクト) │     │  サーバー     │
-└─────────────┘     └──────────────────┘     └──────────────┘
-  クライアント         ローカル中継            別プロジェクト
+└─────────────┘     └──────────────────┘     └─��────────────┘
+  クライアント         ローカル中継            別プロジェク��
 ```
 
-- **通信プロトコル**: UDP（1データグラム = 1 JSONメッセージ）
+- **通信プ��トコル**: UDP（1データグラム = 1 JSONメッセージ）
 - **同期モデル**: `net.PacketConn`（シングルgoroutine `ReadFrom` ループ）
 - **デフォルトポート**: 59100
 
@@ -26,19 +26,18 @@
 |-----------|---------|------|
 | main | `cmd/middleware/main.go` | エントリポイント、ポート設定、forwarder初期化 |
 | server | `internal/server/server.go` | UDPソケット、ReadFromループ、データグラム処理 |
-| model | `internal/model/log_message.go` | LogMessage構造体、イベント種別、JSONパース |
+| model | `internal/model/log_message.go` | LogMessage構造体、カテゴリ定��、JSONパース |
 | forwarder | `internal/forwarder/forwarder.go` | バッファリング + サーバーへのHTTPバッチ転送 |
 | lock | `internal/lock/instance_lock.go` | 多重起動防止（ポートベースのロック） |
 | telemetry | `internal/telemetry/telemetry.go` | OpenTelemetry初期化・終了 |
 
-## 設計判断
+## 設���判断
 
 | 判断 | 選択 | 理由 |
 |------|------|------|
 | TCP vs UDP | UDP | ログ送信はfire-and-forget。接続管理不要でクライアント・サーバーともにシンプル |
 | 同期モデル | `net.ListenPacket`（シングルgoroutine） | コネクションレスなのでgoroutine不要。シンプルなループで十分 |
 | メッセージ形式 | 1データグラム = 1 JSON | 最もシンプル。C#/Pythonから簡単に送れる |
-| detailsの型 | `json.RawMessage` | ツールごとに異なるデータを柔軟に送れる |
 | 多重起動防止の方法 | ポートバインド（59099） | PIDファイルはクラッシュ時にゴミが残る。ポートはOS終了時に自動解放 |
 | 言語 | Go | workflow_lens_serverと言語を統一。標準ライブラリのみで実装可能 |
 
@@ -46,11 +45,11 @@
 
 | 変数名 | 必須 | 説明 | デフォルト |
 |--------|------|------|-----------|
-| `WORKFLOW_LENS_SERVER_URL` | いいえ | 転送先サーバーURL。未設定時はログ出力のみ | （なし） |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | いいえ | OTLPエンドポイント。未設定時はOTel無効 | （なし） |
+| `WORKFLOW_LENS_SERVER_URL` | ���いえ | 転送先サーバーURL。未設定時はログ出力のみ | （なし） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | ���いえ | OTLPエンドポイント。未設定���はOTel無効 | （なし） |
 | `OTEL_SERVICE_NAME` | いいえ | OTelサービス名 | `workflow_lens_middleware` |
 
-## 機能仕様インデックス
+## 機能仕様インデッ��ス
 
 | 機能名 | ファイル | status |
 |--------|---------|--------|

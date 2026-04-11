@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -97,22 +96,25 @@ func (s *SQLStore) InsertLogs(ctx context.Context, logs []model.LogMessage) (int
 
 	count := 0
 	for _, log := range logs {
-		var sessionID, toolVersion any
+		var sessionID, toolVersion, userID any
 		if log.SessionID != nil {
 			sessionID = *log.SessionID
 		}
 		if log.ToolVersion != nil {
 			toolVersion = *log.ToolVersion
 		}
+		if log.UserID != nil {
+			userID = *log.UserID
+		}
 
-		var details any
-		if log.Details != nil {
-			details = string(json.RawMessage(log.Details))
+		var durationMs any
+		if log.DurationMs != nil {
+			durationMs = *log.DurationMs
 		}
 
 		if _, err := stmt.ExecContext(ctx,
-			log.ToolName, log.EventType, log.Timestamp, log.Message,
-			sessionID, toolVersion, details,
+			log.ToolName, log.Category, log.Action, log.Timestamp,
+			sessionID, toolVersion, userID, durationMs,
 		); err != nil {
 			span.SetStatus(codes.Error, "exec failed")
 			span.RecordError(err)

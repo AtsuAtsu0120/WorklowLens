@@ -3,11 +3,11 @@ title: "UDP送信"
 status: implemented
 priority: high
 created: 2026-04-04
-updated: 2026-04-04
+updated: 2026-04-11
 related_files:
   - src/workflow_lens_client/client.py
   - src/workflow_lens_client/log_message.py
-  - src/workflow_lens_client/event_type.py
+  - src/workflow_lens_client/category.py
 ---
 
 # UDP送信
@@ -22,14 +22,14 @@ MayaツールからPythonで簡単にログを送信できるようにする。f
 
 ## 要件
 
-- [ ] UDPデータグラムでJSONメッセージを送信できる
-- [ ] 1データグラム = 1 JSONメッセージ
-- [ ] UTF-8エンコード
-- [ ] 送信先ホスト・ポートをコンストラクタで指定可能（デフォルト: 127.0.0.1:59100）
-- [ ] 送信失敗時（middleware未起動等）に例外を投げない
-- [ ] close()でソケットを解放できる
-- [ ] threading.Lockでスレッドセーフ
-- [ ] 外部依存なし（標準ライブラリのみ）
+- [x] UDPデータグラムでJSONメッセージを送信できる
+- [x] 1データグラム = 1 JSONメッセージ
+- [x] UTF-8エンコード
+- [x] 送信先ホスト・ポートをコンストラクタで指定可能（デフォルト: 127.0.0.1:59100）
+- [x] 送信失敗時（middleware未起動等）に例外を投げない
+- [x] close()でソケットを解放できる
+- [x] threading.Lockでスレッドセーフ
+- [x] 外部依存なし（標準ライブラリのみ）
 
 ## 設計
 
@@ -37,37 +37,43 @@ MayaツールからPythonで簡単にログを送信できるようにする。f
 
 ```json
 {
-  "tool_name": "string (必須)",
-  "event_type": "string (必須) - usage/error/session_start/session_end/cancellation",
-  "timestamp": "ISO 8601 (必須)",
-  "message": "string (必須)",
-  "session_id": "string (任意)",
-  "tool_version": "string (任意)",
-  "details": "JSON object (任意)"
+  "tool_name": "string (必須, コンストラクタで設定)",
+  "category": "string (必須, enum) - asset/build/edit/error/session",
+  "action": "string (必須)",
+  "timestamp": "ISO 8601 (自動)",
+  "session_id": "string (自動)",
+  "user_id": "string (自動 or コンストラクタ)",
+  "tool_version": "string (任意, コンストラクタ)",
+  "duration_ms": "number (任意)"
 }
 ```
 
-### イベント種別
+### カテゴリ
 
 ```python
-USAGE = "usage"
-ERROR = "error"
-SESSION_START = "session_start"
-SESSION_END = "session_end"
-CANCELLATION = "cancellation"
+from enum import Enum
+
+class Category(Enum):
+    ASSET = "asset"
+    BUILD = "build"
+    EDIT = "edit"
+    ERROR = "error"
+    SESSION = "session"
 ```
 
 ### 公開API
 
 ```python
 class WorkflowLens:
-    def __init__(self, tool_name, tool_version=None, host="127.0.0.1", port=59100): ...
-    def send(self, event_type, message, details=None): ...
-    def log_usage(self, message, details=None): ...
-    def log_error(self, message, details=None): ...
-    def log_cancellation(self, message, details=None): ...
+    def __init__(self, tool_name, tool_version=None, user_id=None,
+                 host="127.0.0.1", port=59100): ...
+    def log(self, category: Category, action: str, duration_ms: int = None): ...
+    def measure(self, category: Category, action: str): ...  # context manager
     def close(self): ...
 ```
+
+- `log()` — ログを1件送信する。ツール制作者が考えるのはcategoryとactionの2つだけ。
+- `measure()` — `with` ブロックで囲むとブロック内の所要時間を自動計測して `duration_ms` に設定する。
 
 ### エラーハンドリング
 
@@ -78,16 +84,19 @@ class WorkflowLens:
 
 ## テスト方針
 
-- [ ] UDPソケットをbindして送信メッセージを受信・検証
-- [ ] 必須フィールドのみのJSON構造検証
-- [ ] 全フィールドありのJSON構造検証
-- [ ] details=Noneのときキーが省略されること
-- [ ] タイムスタンプがISO 8601形式であること
-- [ ] middleware未起動時にsend()が例外を投げないこと
-- [ ] close後のsend()が例外を投げないこと
+- [x] UDPソケットをbindして送信メッセージを受信・検証
+- [x] 必須フィールドのみのJSON構造検証
+- [x] 全フィールドありのJSON構造検証
+- [x] duration_ms=Noneのときキーが省略されること
+- [x] タイムスタンプがISO 8601形式であること
+- [x] middleware未起動時にlog()が例外を投げないこと
+- [x] close後のlog()が例外を投げないこと
+- [x] measure()でduration_msが自動設定されること
+- [x] user_id未指定時にOSユーザー名が自動設定されること
 
 ## 変更履歴
 
 | 日付 | 変更内容 |
 |------|---------|
 | 2026-04-04 | 初版作成 |
+| 2026-04-11 | v2: category+action 2層構造に移行。log/measure API、user_id/duration_ms追加 |

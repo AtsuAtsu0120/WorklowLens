@@ -6,30 +6,31 @@ import (
 	"time"
 )
 
-// validEventTypes は許可するイベント種別。
-var validEventTypes = map[string]bool{
-	"usage":         true,
-	"error":         true,
-	"session_start": true,
-	"session_end":   true,
-	"cancellation":  true,
+// validCategories は許可するカ���ゴリ。
+var validCategories = map[string]bool{
+	"asset":   true,
+	"build":   true,
+	"edit":    true,
+	"error":   true,
+	"session": true,
 }
 
 // LogMessage はクライアントから送られるログメッセージ。
 type LogMessage struct {
-	ToolName    string          `json:"tool_name"`
-	EventType   string          `json:"event_type"`
-	Timestamp   time.Time       `json:"timestamp"`
-	Message     string          `json:"message"`
-	SessionID   *string         `json:"session_id,omitempty"`
-	ToolVersion *string         `json:"tool_version,omitempty"`
-	Details     json.RawMessage `json:"details,omitempty"`
-	Traceparent *string         `json:"traceparent,omitempty"`
+	ToolName    string    `json:"tool_name"`
+	Category    string    `json:"category"`
+	Action      string    `json:"action"`
+	Timestamp   time.Time `json:"timestamp"`
+	SessionID   *string   `json:"session_id,omitempty"`
+	ToolVersion *string   `json:"tool_version,omitempty"`
+	UserID      *string   `json:"user_id,omitempty"`
+	DurationMs  *int64    `json:"duration_ms,omitempty"`
+	Traceparent *string   `json:"traceparent,omitempty"`
 }
 
-// ValidateEventType はevent_typeが有効な値かどうかを検証する。
-func ValidateEventType(eventType string) bool {
-	return validEventTypes[eventType]
+// ValidateCategory はcategoryが有効な値かどうかを検証する。
+func ValidateCategory(category string) bool {
+	return validCategories[category]
 }
 
 // Parse はJSONバイト列からLogMessageをパースし、バリデーションを行う。
@@ -42,17 +43,17 @@ func Parse(data []byte) (LogMessage, error) {
 	if msg.ToolName == "" {
 		return LogMessage{}, fmt.Errorf("missing required field: tool_name")
 	}
-	if msg.EventType == "" {
-		return LogMessage{}, fmt.Errorf("missing required field: event_type")
+	if msg.Category == "" {
+		return LogMessage{}, fmt.Errorf("missing required field: category")
 	}
-	if !ValidateEventType(msg.EventType) {
-		return LogMessage{}, fmt.Errorf("invalid event_type: '%s'", msg.EventType)
+	if !ValidateCategory(msg.Category) {
+		return LogMessage{}, fmt.Errorf("invalid category: '%s'", msg.Category)
+	}
+	if msg.Action == "" {
+		return LogMessage{}, fmt.Errorf("missing required field: action")
 	}
 	if msg.Timestamp.IsZero() {
 		return LogMessage{}, fmt.Errorf("missing required field: timestamp")
-	}
-	if msg.Message == "" {
-		return LogMessage{}, fmt.Errorf("missing required field: message")
 	}
 
 	return msg, nil

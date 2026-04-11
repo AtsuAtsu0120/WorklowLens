@@ -1,14 +1,17 @@
 """workflow_lens_middlewareへUDPでログを送信するクライアント。"""
 
+import getpass
 import os
 import shutil
 import socket
 import subprocess
 import threading
+import time
 import uuid
-from typing import Any, Dict, Optional
+from contextlib import contextmanager
+from typing import Iterator, Optional
 
-from . import event_type as EventType
+from .category import Category
 from .log_message import build_json
 
 
@@ -28,6 +31,7 @@ class WorkflowLens:
         self,
         tool_name: str,
         tool_version: Optional[str] = None,
+        user_id: Optional[str] = None,
         host: str = "127.0.0.1",
         port: int = 59100,
         middleware_path: Optional[str] = None,
@@ -35,6 +39,7 @@ class WorkflowLens:
     ) -> None:
         self._tool_name = tool_name
         self._tool_version = tool_version
+        self._user_id = user_id or self._resolve_user_id()
         self._host = host
         self._port = port
         self._session_id = self._generate_session_id()
@@ -91,35 +96,26 @@ class WorkflowLens:
             f"環境変数 {cls.MIDDLEWARE_PATH_ENV_VAR} を設定してください。"
         )
 
+    @staticmethod
+    def _resolve_user_id() -> str:
+        """OSユーザー名を取得する。"""
+        try:
+            return getpass.getuser()
+        except Exception:
+            return os.environ.get("USER", "unknown")
+
     @property
     def session_id(self) -> str:
         """現在のセッションID。"""
         return self._session_id
 
-    def start_session(
+    def log(
         self,
-        message: str = "Session started",
-        details: Optional[Dict[str, Any]] = None,
+        category: Category,
+        action: str,
+        duration_ms: Optional[int] = None,
     ) -> None:
-        """セッションを開始する。新しいsession_idを生成し、session_startイベントを送信する。"""
-        self._session_id = self._generate_session_id()
-        self.send(EventType.SESSION_START, message, details)
-
-    def end_session(
-        self,
-        message: str = "Session ended",
-        details: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """セッションを終了する。session_endイベントを送信する。"""
-        self.send(EventType.SESSION_END, message, details)
-
-    def send(
-        self,
-        event_type: str,
-        message: str,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """ログメッセージを送信する。"""
+        """ログを送信する。"""
         from ._telemetry import get_traceparent, start_span
 
         try:
@@ -127,7 +123,8 @@ class WorkflowLens:
                 "workflowlens.send",
                 attributes={
                     "tool.name": self._tool_name,
-                    "event.type": event_type,
+                    "category": category.value,
+                    "action": action,
                     "session.id": self._session_id,
                 },
             ):
@@ -138,34 +135,27 @@ class WorkflowLens:
                     traceparent = get_traceparent()
                     json_str = build_json(
                         self._tool_name,
-                        event_type,
-                        message,
+                        category.value,
+                        action,
                         self._session_id,
                         self._tool_version,
-                        details,
+                        self._user_id,
+                        duration_ms,
                         traceparent=traceparent,
                     )
                     sock.sendto(json_str.encode("utf-8"), (self._host, self._port))
         except OSError:
             pass
 
-    def log_usage(
-        self, message: str, details: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """使用ログを送信する。"""
-        self.send(EventType.USAGE, message, details)
-
-    def log_error(
-        self, message: str, details: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """エラーログを送信する。"""
-        self.send(EventType.ERROR, message, details)
-
-    def log_cancellation(
-        self, message: str, details: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """キャンセルログを送信する。"""
-        self.send(EventType.CANCELLATION, message, details)
+    @contextmanager
+    def measure(self, category: Category, action: str) -> Iterator[None]:
+        """操作時間を自動計測するコンテキストマネージャ。"""
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            self.log(category, action, duration_ms=elapsed_ms)
 
     def close(self) -> None:
         """ソケットを閉じ、middlewareプロセスがあれば停止する。"""
@@ -183,13 +173,13 @@ class WorkflowLens:
             self._process = None
 
     def __enter__(self) -> "WorkflowLens":
-        """コンテキストマネージャ: start_sessionを自動呼出し。"""
-        self.start_session()
+        """コンテキストマネージャ: セッション開始を自動送信。"""
+        self.log(Category.SESSION, "start")
         return self
 
     def __exit__(self, *args: object) -> None:
-        """コンテキストマネージャ: end_session + close。"""
-        self.end_session()
+        """コンテキストマネージャ: セッション終了 + close。"""
+        self.log(Category.SESSION, "end")
         self.close()
 
     @staticmethod

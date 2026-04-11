@@ -15,7 +15,7 @@ pytest -v                  # 全テスト
 src/workflow_lens_client/
   client.py                 メインクラス（socket, threading.Lock）
   log_message.py            JSONペイロード組み立て
-  event_type.py             イベント種別定数
+  category.py               カテゴリenum定義
   __init__.py               公開APIのre-export
 tests/
   test_log_message.py       JSON組み立てのユニットテスト

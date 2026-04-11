@@ -38,7 +38,7 @@ func newMockStore(inserted int, err error) *mockStore {
 }
 
 func TestHandlePostLogs_Valid(t *testing.T) {
-	body := `[{"tool_name":"TestTool","event_type":"usage","timestamp":"2026-04-04T10:00:00Z","message":"hello"}]`
+	body := `[{"tool_name":"TestTool","category":"edit","timestamp":"2026-04-04T10:00:00Z","action":"hello"}]`
 	req := httptest.NewRequest("POST", "/logs", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestHandlePostLogs_InvalidJSON(t *testing.T) {
 }
 
 func TestHandlePostLogs_MissingField(t *testing.T) {
-	body := `[{"event_type":"usage","timestamp":"2026-04-04T10:00:00Z","message":"hello"}]`
+	body := `[{"category":"edit","timestamp":"2026-04-04T10:00:00Z","action":"hello"}]`
 	req := httptest.NewRequest("POST", "/logs", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
@@ -100,8 +100,8 @@ func TestHandlePostLogs_MissingField(t *testing.T) {
 	}
 }
 
-func TestHandlePostLogs_InvalidEventType(t *testing.T) {
-	body := `[{"tool_name":"TestTool","event_type":"unknown","timestamp":"2026-04-04T10:00:00Z","message":"hello"}]`
+func TestHandlePostLogs_InvalidCategory(t *testing.T) {
+	body := `[{"tool_name":"TestTool","category":"unknown","timestamp":"2026-04-04T10:00:00Z","action":"hello"}]`
 	req := httptest.NewRequest("POST", "/logs", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
@@ -114,7 +114,7 @@ func TestHandlePostLogs_InvalidEventType(t *testing.T) {
 }
 
 func TestHandlePostLogs_StoreError(t *testing.T) {
-	body := `[{"tool_name":"TestTool","event_type":"usage","timestamp":"2026-04-04T10:00:00Z","message":"hello"}]`
+	body := `[{"tool_name":"TestTool","category":"edit","timestamp":"2026-04-04T10:00:00Z","action":"hello"}]`
 	req := httptest.NewRequest("POST", "/logs", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
@@ -144,12 +144,13 @@ func TestHandlePostLogs_BodyTooLarge(t *testing.T) {
 func TestHandlePostLogs_WithOptionalFields(t *testing.T) {
 	body := `[{
 		"tool_name":"TestTool",
-		"event_type":"session_start",
+		"category":"session",
 		"timestamp":"2026-04-04T10:00:00Z",
-		"message":"started",
+		"action":"start",
 		"session_id":"abc123",
 		"tool_version":"1.0.0",
-		"details":{"feature":"paint"}
+		"user_id":"user-42",
+		"duration_ms":1500
 	}]`
 	req := httptest.NewRequest("POST", "/logs", strings.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -176,8 +177,11 @@ func TestHandlePostLogs_WithOptionalFields(t *testing.T) {
 	if captured[0].ToolVersion == nil || *captured[0].ToolVersion != "1.0.0" {
 		t.Errorf("expected tool_version '1.0.0'")
 	}
-	if captured[0].Details == nil {
-		t.Error("expected details to be non-nil")
+	if captured[0].UserID == nil || *captured[0].UserID != "user-42" {
+		t.Errorf("expected user_id 'user-42'")
+	}
+	if captured[0].DurationMs == nil || *captured[0].DurationMs != 1500 {
+		t.Errorf("expected duration_ms 1500")
 	}
 }
 

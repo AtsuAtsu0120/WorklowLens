@@ -3,11 +3,11 @@ title: "UDP送信"
 status: implemented
 priority: high
 created: 2026-04-04
-updated: 2026-04-04
+updated: 2026-04-11
 related_files:
   - src/WorkflowLensClient/WorkflowLens.cs
   - src/WorkflowLensClient/LogMessage.cs
-  - src/WorkflowLensClient/EventType.cs
+  - src/WorkflowLensClient/Category.cs
 ---
 
 # UDP送信
@@ -22,14 +22,14 @@ UnityツールからC#で簡単にログを送信できるようにする。fire
 
 ## 要件
 
-- [ ] UDPデータグラムでJSONメッセージを送信できる
-- [ ] 1データグラム = 1 JSONメッセージ
-- [ ] UTF-8エンコード
-- [ ] 送信先ホスト・ポートをコンストラクタで指定可能（デフォルト: 127.0.0.1:59100）
-- [ ] 送信失敗時（middleware未起動等）に例外を投げない
-- [ ] IDisposableでUdpClientを解放できる
-- [ ] スレッドセーフ
-- [ ] 外部依存なし（標準ライブラリのみ）
+- [x] UDPデータグラムでJSONメッセージを送信できる
+- [x] 1データグラム = 1 JSONメッセージ
+- [x] UTF-8エンコード
+- [x] 送信先ホスト・ポートをコンストラクタで指定可能（デフォルト: 127.0.0.1:59100）
+- [x] 送信失敗時（middleware未起動等）に例外を投げない
+- [x] IDisposableでUdpClientを解放できる
+- [x] スレッドセーフ
+- [x] 外部依存なし（標準ライブラリのみ）
 
 ## 設計
 
@@ -37,26 +37,27 @@ UnityツールからC#で簡単にログを送信できるようにする。fire
 
 ```json
 {
-  "tool_name": "string (必須)",
-  "event_type": "string (必須) - usage/error/session_start/session_end/cancellation",
-  "timestamp": "ISO 8601 (必須)",
-  "message": "string (必須)",
-  "session_id": "string (任意)",
-  "tool_version": "string (任意)",
-  "details": "JSON object (任意)"
+  "tool_name": "string (必須, コンストラクタで設定)",
+  "category": "string (必須, enum) - asset/build/edit/error/session",
+  "action": "string (必須)",
+  "timestamp": "ISO 8601 (自動)",
+  "session_id": "string (自動)",
+  "user_id": "string (自動 or コンストラクタ)",
+  "tool_version": "string (任意, コンストラクタ)",
+  "duration_ms": "number (任意)"
 }
 ```
 
-### イベント種別
+### カテゴリ
 
 ```csharp
-public static class EventType
+public enum Category
 {
-    public const string Usage = "usage";
-    public const string Error = "error";
-    public const string SessionStart = "session_start";
-    public const string SessionEnd = "session_end";
-    public const string Cancellation = "cancellation";
+    Asset,
+    Build,
+    Edit,
+    Error,
+    Session,
 }
 ```
 
@@ -66,19 +67,21 @@ public static class EventType
 public class WorkflowLens : IDisposable
 {
     public WorkflowLens(string toolName, string? toolVersion = null,
+                      string? userId = null,
                       string host = "127.0.0.1", int port = 59100);
 
-    public void Send(string eventType, string message, string? details = null);
-    public void LogUsage(string message, string? details = null);
-    public void LogError(string message, string? details = null);
-    public void LogCancellation(string message, string? details = null);
+    public void Log(Category category, string action, long? durationMs = null);
+    public IDisposable MeasureScope(Category category, string action);
     public void Dispose();
 }
 ```
 
+- `Log()` — ログを1件送信する。ツール制作者が考えるのはcategoryとactionの2つだけ。
+- `MeasureScope()` — `using` ブロックで囲むとブロック内の所要時間を自動計測して `duration_ms` に設定する。
+
 ### JSON組み立て
 
-`LogMessage` 内部クラスで文字列補間によりJSON文字列を構築する。`details` は生JSON文字列をそのまま埋め込む。
+`LogMessage` 内部クラスで文字列補間によりJSON文字列を構築する。
 
 ### エラーハンドリング
 
@@ -89,16 +92,19 @@ public class WorkflowLens : IDisposable
 
 ## テスト方針
 
-- [ ] UDPソケットをbindして送信メッセージを受信・検証
-- [ ] 必須フィールドのみのJSON構造検証
-- [ ] 全フィールドありのJSON構造検証
-- [ ] details省略時にキーが省略されること
-- [ ] タイムスタンプがISO 8601形式であること
-- [ ] middleware未起動時にSend()が例外を投げないこと
-- [ ] Dispose後のSend()が例外を投げないこと
+- [x] UDPソケットをbindして送信メッセージを受信・検証
+- [x] 必須フィールドのみのJSON構造検証
+- [x] 全フィールドありのJSON構造検証
+- [x] duration_ms省略時にキーが省略されること
+- [x] タイムスタンプがISO 8601形式であること
+- [x] middleware未起動時にLog()が例外を投げないこと
+- [x] Dispose後のLog()が例外を投げないこと
+- [x] MeasureScope()でduration_msが自動設定されること
+- [x] user_id未指定時にOSユーザー名が自動設定されること
 
 ## 変更履歴
 
 | 日付 | 変更内容 |
 |------|---------|
 | 2026-04-04 | 初版作成 |
+| 2026-04-11 | v2: category+action 2層構造に移行。Log/MeasureScope API、user_id/duration_ms追加 |

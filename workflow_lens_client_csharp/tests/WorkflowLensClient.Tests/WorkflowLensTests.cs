@@ -1,9 +1,9 @@
 using System;
-using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using Xunit;
 
 namespace WorkflowLensClient.Tests
@@ -18,14 +18,14 @@ namespace WorkflowLensClient.Tests
         }
 
         [Fact]
-        public void Send_UDPで正しいJSONが届く()
+        public void Log_UDPで正しいJSONが届く()
         {
             var port = GetFreePort();
             using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
             receiver.Client.ReceiveTimeout = 3000;
 
             using var logger = new WorkflowLens("test_tool", "1.0.0", port: port, autoStartMiddleware: false);
-            logger.LogUsage("ボタン押下");
+            logger.Log(Category.Edit, "brush_apply");
 
             var ep = new IPEndPoint(IPAddress.Any, 0);
             var data = receiver.Receive(ref ep);
@@ -34,48 +34,89 @@ namespace WorkflowLensClient.Tests
             var root = doc.RootElement;
 
             Assert.Equal("test_tool", root.GetProperty("tool_name").GetString());
-            Assert.Equal("usage", root.GetProperty("event_type").GetString());
-            Assert.Equal("ボタン押下", root.GetProperty("message").GetString());
+            Assert.Equal("edit", root.GetProperty("category").GetString());
+            Assert.Equal("brush_apply", root.GetProperty("action").GetString());
             Assert.Equal("1.0.0", root.GetProperty("tool_version").GetString());
             Assert.True(root.TryGetProperty("session_id", out _));
+            Assert.True(root.TryGetProperty("user_id", out _));
         }
 
         [Fact]
-        public void Send_detailsが正しく埋め込まれる()
+        public void Log_durationMsが正しく設定される()
         {
             var port = GetFreePort();
             using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
             receiver.Client.ReceiveTimeout = 3000;
 
             using var logger = new WorkflowLens("test_tool", port: port, autoStartMiddleware: false);
-            logger.LogUsage("操作", "{\"action\":\"click\",\"target\":\"button_a\"}");
+            logger.Log(Category.Build, "compile", durationMs: 3200);
 
             var ep = new IPEndPoint(IPAddress.Any, 0);
             var data = receiver.Receive(ref ep);
             var json = Encoding.UTF8.GetString(data);
             using var doc = JsonDocument.Parse(json);
-            var details = doc.RootElement.GetProperty("details");
 
-            Assert.Equal("click", details.GetProperty("action").GetString());
-            Assert.Equal("button_a", details.GetProperty("target").GetString());
+            Assert.Equal(3200, doc.RootElement.GetProperty("duration_ms").GetInt64());
         }
 
         [Fact]
-        public void Send_middleware未起動でも例外を投げない()
+        public void Log_middleware未起動でも例外を投げない()
         {
-            // 誰もリッスンしていないポートに送信
             using var logger = new WorkflowLens("test_tool", port: 59199, autoStartMiddleware: false);
-            var ex = Record.Exception(() => logger.LogUsage("テスト"));
+            var ex = Record.Exception(() => logger.Log(Category.Edit, "test"));
             Assert.Null(ex);
         }
 
         [Fact]
-        public void Send_Dispose後でも例外を投げない()
+        public void Log_Dispose後でも例外を投げない()
         {
             var logger = new WorkflowLens("test_tool", port: 59199, autoStartMiddleware: false);
             logger.Dispose();
-            var ex = Record.Exception(() => logger.LogUsage("テスト"));
+            var ex = Record.Exception(() => logger.Log(Category.Edit, "test"));
             Assert.Null(ex);
+        }
+
+        [Fact]
+        public void MeasureScope_durationMsが自動設定される()
+        {
+            var port = GetFreePort();
+            using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
+            receiver.Client.ReceiveTimeout = 3000;
+
+            using var logger = new WorkflowLens("test_tool", port: port, autoStartMiddleware: false);
+            using (logger.MeasureScope(Category.Build, "compile"))
+            {
+                Thread.Sleep(50);
+            }
+
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            var data = receiver.Receive(ref ep);
+            var json = Encoding.UTF8.GetString(data);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            Assert.Equal("build", root.GetProperty("category").GetString());
+            Assert.Equal("compile", root.GetProperty("action").GetString());
+            Assert.True(root.GetProperty("duration_ms").GetInt64() >= 40);
+        }
+
+        [Fact]
+        public void userId未指定時にOSユーザー名が自動設定される()
+        {
+            var port = GetFreePort();
+            using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
+            receiver.Client.ReceiveTimeout = 3000;
+
+            using var logger = new WorkflowLens("test_tool", port: port, autoStartMiddleware: false);
+            logger.Log(Category.Edit, "test");
+
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            var data = receiver.Receive(ref ep);
+            var json = Encoding.UTF8.GetString(data);
+            using var doc = JsonDocument.Parse(json);
+
+            var userId = doc.RootElement.GetProperty("user_id").GetString();
+            Assert.Equal(Environment.UserName, userId);
         }
     }
 
@@ -96,54 +137,45 @@ namespace WorkflowLensClient.Tests
         }
 
         [Fact]
-        public void StartSession_session_startイベントが送信される()
+        public void Session_startログが送信される()
         {
             var port = GetFreePort();
             using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
             receiver.Client.ReceiveTimeout = 3000;
 
             using var logger = new WorkflowLens("test_tool", port: port, autoStartMiddleware: false);
-            logger.StartSession();
+            logger.Log(Category.Session, "start");
 
             var ep = new IPEndPoint(IPAddress.Any, 0);
             var data = receiver.Receive(ref ep);
             var json = Encoding.UTF8.GetString(data);
             using var doc = JsonDocument.Parse(json);
 
-            Assert.Equal("session_start", doc.RootElement.GetProperty("event_type").GetString());
+            Assert.Equal("session", doc.RootElement.GetProperty("category").GetString());
+            Assert.Equal("start", doc.RootElement.GetProperty("action").GetString());
         }
 
         [Fact]
-        public void StartSession_新しいsession_idが生成される()
-        {
-            using var logger = new WorkflowLens("test_tool", port: 59199, autoStartMiddleware: false);
-            var first = logger.SessionId;
-            logger.StartSession();
-            var second = logger.SessionId;
-
-            Assert.NotEqual(first, second);
-        }
-
-        [Fact]
-        public void EndSession_session_endイベントが送信される()
+        public void Session_endログが送信される()
         {
             var port = GetFreePort();
             using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
             receiver.Client.ReceiveTimeout = 3000;
 
             using var logger = new WorkflowLens("test_tool", port: port, autoStartMiddleware: false);
-            logger.EndSession();
+            logger.Log(Category.Session, "end");
 
             var ep = new IPEndPoint(IPAddress.Any, 0);
             var data = receiver.Receive(ref ep);
             var json = Encoding.UTF8.GetString(data);
             using var doc = JsonDocument.Parse(json);
 
-            Assert.Equal("session_end", doc.RootElement.GetProperty("event_type").GetString());
+            Assert.Equal("session", doc.RootElement.GetProperty("category").GetString());
+            Assert.Equal("end", doc.RootElement.GetProperty("action").GetString());
         }
 
         [Fact]
-        public void Send_session_idが自動付与される()
+        public void Log_session_idが自動付与される()
         {
             var port = GetFreePort();
             using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
@@ -151,7 +183,7 @@ namespace WorkflowLensClient.Tests
 
             using var logger = new WorkflowLens("test_tool", port: port, autoStartMiddleware: false);
             var expectedId = logger.SessionId;
-            logger.LogUsage("テスト");
+            logger.Log(Category.Edit, "test");
 
             var ep = new IPEndPoint(IPAddress.Any, 0);
             var data = receiver.Receive(ref ep);
@@ -168,7 +200,6 @@ namespace WorkflowLensClient.Tests
         public void middlewarePath未指定でプロセスが起動されない()
         {
             using var logger = new WorkflowLens("test_tool", port: 59199, autoStartMiddleware: false);
-            // middlewarePath未指定なので正常に生成・破棄できる
             logger.Dispose();
         }
 
@@ -202,7 +233,6 @@ namespace WorkflowLensClient.Tests
         [Fact]
         public void autoStartMiddleware_falseでプロセスが起動されない()
         {
-            // autoStartMiddleware=false（デフォルト）の場合、探索しない
             var result = WorkflowLens.ResolveMiddlewarePath(null, false);
             Assert.Null(result);
         }

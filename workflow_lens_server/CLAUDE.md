@@ -17,7 +17,7 @@ go vet ./...                  # 静的解析
 cmd/server/main.go             エントリポイント
 internal/
   handler/logs.go               POST /logs ハンドラ
-  model/log_message.go          LogMessage, EventType
+  model/log_message.go          LogMessage, Category
   store/sql_store.go            DB接続・INSERT（database/sql汎用実装）
   store/dialect.go              SQL方言定義（SQLite/PostgreSQL/MySQL）
   store/driver_default.go       デフォルトSQLiteドライバ

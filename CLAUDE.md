@@ -1,4 +1,4 @@
-# tool_logger プロジェクト
+# WorkflowLens プロジェクト
 
 ## 仕様書駆動設計 (SDD)
 
@@ -28,12 +28,22 @@
 
 ## プロジェクト構成
 
-- `tool_logger_middleware/` — UDP受信→HTTP転送の中継サーバー（Go）
-- `tool_logger_server/` — ログ保存・閲覧のWebサーバー（Go）
-- `tool_logger_client_csharp/` — UDP送信クライアントライブラリ（C# / .NET Standard 2.1）
-- `tool_logger_client_python/` — UDP送信クライアントライブラリ（Python 3.7+）
+- `workflow_lens_middleware/` — UDP受信→HTTP転送の中継サーバー（Go）
+- `workflow_lens_server/` — ログ保存・閲覧のWebサーバー（Go）
+- `workflow_lens_client_csharp/` — UDP送信クライアントライブラリ（C# / .NET Standard 2.1）
+- `workflow_lens_client_python/` — UDP送信クライアントライブラリ（Python 3.7+）
 
 ## 共通規約
 
 - コメント・ドキュメントは日本語
 - ユーザーはC#に精通、Goもある程度わかる。冗長な言語基礎の説明は不要
+
+## 作業時の確認ルール
+
+- **判断に迷ったら必ず `AskUserQuestion` ツールを使ってユーザーに確認する**
+- 特に以下の場面では勝手に進めず確認すること：
+  - 実装方針が複数ありえるとき
+  - 仕様書に記載がない挙動を決める必要があるとき
+  - 既存コードの変更範囲が広くなりそうなとき
+  - 要件が曖昧・不明確なとき
+- 自分で推測して進めるより、一度聞いてから進めるほうが望ましい

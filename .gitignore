@@ -1,6 +1,6 @@
 # Go ビルド成果物（バイナリ）
-/tool_logger_middleware/middleware
-/tool_logger_server/server
+/workflow_lens_middleware/middleware
+/workflow_lens_server/server
 **/.gopath/
 
 # Rust (legacy)

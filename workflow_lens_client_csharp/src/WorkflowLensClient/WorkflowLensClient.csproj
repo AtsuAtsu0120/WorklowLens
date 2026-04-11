@@ -12,6 +12,10 @@
     <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="8.0.1" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../WorkflowLensClient.Generators/WorkflowLensClient.Generators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="WorkflowLensClient.Tests" />
   </ItemGroup>
 </Project>

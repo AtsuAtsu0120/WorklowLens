@@ -27,6 +27,9 @@ workflow_lens_middlewareへUDPでログを送信するC#クライアントライ
 | `src/WorkflowLensClient/WorkflowLens.cs` | メインクラス。UdpClientでJSON送信、MeasureScope |
 | `src/WorkflowLensClient/LogMessage.cs` | JSONペイロードの組み立て |
 | `src/WorkflowLensClient/Category.cs` | カテゴリenum定義 |
+| `src/WorkflowLensClient/WorkflowLensOptions.cs` | コンストラクタ設定のOptionsクラス |
+| `src/WorkflowLensClient/CategoryLogger.cs` | カテゴリ固定のログ送信プロパティ |
+| `src/WorkflowLensClient.Generators/` | Source Generator + Analyzer（netstandard2.0） |
 
 ## 設計判断
 
@@ -47,3 +50,8 @@ workflow_lens_middlewareへUDPでログを送信するC#クライアントライ
 | UDP送信 | [udp-sender.md](features/udp-sender.md) | implemented |
 | セッション管理 | [session-management.md](features/session-management.md) | implemented |
 | Middlewareプロセス管理 | [middleware-process.md](features/middleware-process.md) | implemented |
+| Optionsパターン | [options-pattern.md](features/options-pattern.md) | implemented |
+| セッション自動化 | [auto-session.md](features/auto-session.md) | implemented |
+| カテゴリロガー | [category-scope.md](features/category-scope.md) | implemented |
+| Source Generator | [source-generator.md](features/source-generator.md) | implemented |
+| Analyzer | [analyzer.md](features/analyzer.md) | implemented |

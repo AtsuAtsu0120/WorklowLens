@@ -18,10 +18,13 @@ namespace WorkflowLensClient
         private readonly string _userId;
         private readonly string _host;
         private readonly int _port;
+        private readonly bool _autoSession;
         private UdpClient? _client;
         private Process? _process;
         private readonly string _sessionId;
         private bool _disposed;
+        private bool _sessionStartSent;
+        private bool _sessionEndSent;
 
         /// <summary>現在のセッションID。</summary>
         public string SessionId => _sessionId;
@@ -32,28 +35,27 @@ namespace WorkflowLensClient
         /// <summary>PATH探索時のバイナリ名。</summary>
         internal const string MiddlewareBinaryName = "workflow_lens_middleware";
 
+        /// <summary>
+        /// Optionsパターンでインスタンスを生成する。
+        /// </summary>
         /// <param name="toolName">ツール名（必須）。</param>
-        /// <param name="toolVersion">ツールバージョン（任意）。</param>
-        /// <param name="userId">ユーザーID（任意、未指定時はOSユーザー名）。</param>
-        /// <param name="host">送信先ホスト。</param>
-        /// <param name="port">送信先ポート。</param>
-        /// <param name="middlewarePath">middlewareバイナリのパス（任意）。指定時はプロセスを自動起動・停止する。</param>
-        /// <param name="autoStartMiddleware">trueの場合、環境変数→PATH探索でmiddlewareバイナリを自動検出して起動する。</param>
-        public WorkflowLens(string toolName, string? toolVersion = null,
-                          string? userId = null,
-                          string host = "127.0.0.1", int port = 59100,
-                          string? middlewarePath = null,
-                          bool autoStartMiddleware = true)
+        /// <param name="configure">オプション設定コールバック（任意）。</param>
+        public WorkflowLens(string toolName, Action<WorkflowLensOptions>? configure = null)
         {
             _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
-            _toolVersion = toolVersion;
-            _userId = userId ?? Environment.UserName;
-            _host = host;
-            _port = port;
+
+            var options = new WorkflowLensOptions();
+            configure?.Invoke(options);
+
+            _toolVersion = options.ToolVersion;
+            _userId = options.UserId ?? Environment.UserName;
+            _host = options.Host;
+            _port = options.Port;
+            _autoSession = options.AutoSession;
             _sessionId = GenerateSessionId();
             _client = new UdpClient();
 
-            var resolvedPath = ResolveMiddlewarePath(middlewarePath, autoStartMiddleware);
+            var resolvedPath = ResolveMiddlewarePath(options.MiddlewarePath, options.AutoStartMiddleware);
             if (resolvedPath != null)
             {
                 try
@@ -63,7 +65,7 @@ namespace WorkflowLensClient
                         StartInfo = new ProcessStartInfo
                         {
                             FileName = resolvedPath,
-                            Arguments = port.ToString(),
+                            Arguments = _port.ToString(),
                             UseShellExecute = false,
                             CreateNoWindow = true,
                             RedirectStandardOutput = true,
@@ -79,7 +81,41 @@ namespace WorkflowLensClient
                     throw;
                 }
             }
+
+            // AutoSession: コンストラクタでSession/startを自動送信
+            if (_autoSession)
+            {
+                Log(Category.Session, "start");
+            }
         }
+
+        /// <summary>
+        /// 既存の互換コンストラクタ。内部でOptionsパターンに委譲する。
+        /// AutoSessionはfalse（既存コードの動作を変えない）。
+        /// </summary>
+        /// <param name="toolName">ツール名（必須）。</param>
+        /// <param name="toolVersion">ツールバージョン（任意）。</param>
+        /// <param name="userId">ユーザーID（任意、未指定時はOSユーザー名）。</param>
+        /// <param name="host">送信先ホスト。</param>
+        /// <param name="port">送信先ポート。</param>
+        /// <param name="middlewarePath">middlewareバイナリのパス（任意）。</param>
+        /// <param name="autoStartMiddleware">trueの場合、middlewareバイナリを自動検出して起動する。</param>
+        public WorkflowLens(string toolName, string? toolVersion,
+                          string? userId = null,
+                          string host = "127.0.0.1", int port = 59100,
+                          string? middlewarePath = null,
+                          bool autoStartMiddleware = true)
+            : this(toolName, o =>
+            {
+                o.ToolVersion = toolVersion;
+                o.UserId = userId;
+                o.Host = host;
+                o.Port = port;
+                o.MiddlewarePath = middlewarePath;
+                o.AutoStartMiddleware = autoStartMiddleware;
+                o.AutoSession = false;
+            })
+        { }
 
         /// <summary>
         /// middlewareバイナリのパスを解決する。
@@ -147,6 +183,21 @@ namespace WorkflowLensClient
         /// <param name="durationMs">操作時間（ミリ秒、任意）。</param>
         public void Log(Category category, string action, long? durationMs = null)
         {
+            // AutoSession: 重複防止
+            if (category == Category.Session)
+            {
+                if (action == "start")
+                {
+                    if (_sessionStartSent) return;
+                    _sessionStartSent = true;
+                }
+                else if (action == "end")
+                {
+                    if (_sessionEndSent) return;
+                    _sessionEndSent = true;
+                }
+            }
+
             try
             {
                 var client = _client;
@@ -183,8 +234,24 @@ namespace WorkflowLensClient
         }
 
         /// <summary>
+        /// カテゴリを固定したCategoryLoggerを生成する。
+        /// action指定時はusingブロック全体の所要時間を自動計測してDispose時に送信する。
+        /// action省略時はグルーピング用（Dispose時にログは送信しない）。
+        /// </summary>
+        public CategoryLogger Asset(string? action = null) => new CategoryLogger(this, Category.Asset, action);
+
+        /// <inheritdoc cref="Asset(string?)"/>
+        public CategoryLogger Build(string? action = null) => new CategoryLogger(this, Category.Build, action);
+
+        /// <inheritdoc cref="Asset(string?)"/>
+        public CategoryLogger Edit(string? action = null) => new CategoryLogger(this, Category.Edit, action);
+
+        /// <inheritdoc cref="Asset(string?)"/>
+        public CategoryLogger Error(string? action = null) => new CategoryLogger(this, Category.Error, action);
+
+        /// <summary>
         /// 操作時間を自動計測するスコープを開始する。
-        /// usingブロックで囲むとDisposeTime時に自動的にLogが呼ばれる。
+        /// usingブロックで囲むとDispose時に自動的にLogが呼ばれる。
         /// </summary>
         public IDisposable MeasureScope(Category category, string action)
         {
@@ -195,6 +262,12 @@ namespace WorkflowLensClient
         {
             if (_disposed) return;
             _disposed = true;
+
+            // AutoSession: DisposeでSession/endを自動送信
+            if (_autoSession && !_sessionEndSent)
+            {
+                Log(Category.Session, "end");
+            }
 
             _client?.Dispose();
             _client = null;

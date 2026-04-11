@@ -1,0 +1,212 @@
+{
+  "uid": "workflowlens",
+  "title": "WorkflowLens - ツール利用分析",
+  "description": "OpenTelemetryメトリクスによるゲーム開発ツールの利用状況・エラー・セッション分析",
+  "tags": ["workflowlens", "opentelemetry"],
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "",
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "概要",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Total Events",
+      "type": "stat",
+      "targets": [{
+        "expr": "sum(app_events_total)",
+        "legendFormat": "Total"
+      }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Active Tools",
+      "type": "stat",
+      "targets": [{
+        "expr": "count(count by (tool_name)(app_events_total))",
+        "legendFormat": "Tools"
+      }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Sessions Started",
+      "type": "stat",
+      "targets": [{
+        "expr": "sum(app_sessions_started_total)",
+        "legendFormat": "Sessions"
+      }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Error Rate",
+      "type": "stat",
+      "targets": [{
+        "expr": "sum(app_events_total{event_type=\"error\"}) / sum(app_events_total)",
+        "legendFormat": "Error Rate"
+      }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "イベント推移",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "options": { "tooltip": { "mode": "multi" } },
+      "title": "Event Volume Over Time",
+      "type": "timeseries",
+      "targets": [{
+        "expr": "sum by (event_type)(rate(app_events_total[5m]))",
+        "legendFormat": "{{event_type}}"
+      }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 6,
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "title": "Events by Tool",
+      "type": "bargauge",
+      "targets": [{
+        "expr": "sum by (tool_name)(app_events_total)",
+        "legendFormat": "{{tool_name}}"
+      }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "エラー分析",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 7,
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
+      "title": "Error Rate by Tool",
+      "type": "bargauge",
+      "targets": [{
+        "expr": "sum by (tool_name)(rate(app_events_total{event_type=\"error\"}[5m])) / sum by (tool_name)(rate(app_events_total[5m]))",
+        "legendFormat": "{{tool_name}}"
+      }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 8,
+      "options": { "tooltip": { "mode": "multi" } },
+      "title": "Errors Over Time",
+      "type": "timeseries",
+      "targets": [{
+        "expr": "sum by (tool_name)(rate(app_events_total{event_type=\"error\"}[5m]))",
+        "legendFormat": "{{tool_name}}"
+      }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "セッション・バージョン",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 9,
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Session Count",
+      "type": "stat",
+      "targets": [{
+        "expr": "sum(app_sessions_started_total)",
+        "legendFormat": "Started"
+      }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "workflowlens-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 10,
+      "options": { "pieType": "donut", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Tool Version Distribution",
+      "type": "piechart",
+      "targets": [{
+        "expr": "sum by (tool_version)(app_sessions_started_total)",
+        "legendFormat": "{{tool_version}}"
+      }]
+    }
+  ],
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "links": []
+}

@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.0.0 (2026-04-12)
+
+### 概要
+OpenTelemetry分散トレーシング対応、ログスキーマv2への移行、クライアントAPIの大幅強化を含むメジャーリリース。
+
+### 新機能
+- Go middleware/serverにOpenTelemetry計装を追加（OTLP gRPCエクスポーター、スパン・メトリクス）
+- C#/PythonクライアントにOpenTelemetryトレーシングを追加（クライアント→middleware→serverの分散トレース）
+- middlewareにHTTPバッチ転送を実装（100件 or 5秒ごとにバッチPOST、W3C Trace Context対応）
+- モニタリング基盤をOTel Collector + Prometheusに移行、GrafanaダッシュボードをPromQLベースに刷新
+- ログスキーマv2: category+actionの2層構造に統合、user_id自動取得・duration_ms対応（**Breaking Change: DB再作成が必要**）
+- C#クライアントAPI最適化: Options Pattern、AutoSession、CategoryLogger、Source Generator、Roslyn Analyzer
+- PythonクライアントAPI最適化: Options Pattern、AutoSession、CategoryLogger、デコレータ対応
+
+### バグ修正
+- .gitignoreのパターン修正（cmd/配下のmain.goが意図せず除外されていた問題）
+
+### その他
+- tool_logger_* → workflow_lens_* にリネーム
+- README・仕様書をOTel対応 + HTTP転送に合わせて更新
+
+---
+
 ## v0.1.0 (2026-04-04)
 
 ### 概要

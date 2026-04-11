@@ -1,7 +1,7 @@
 # WorkflowLens - Analytics for Game Development Tools
 
 ゲーム開発ツール（Unity、Maya等）の利用ログ・エラーログを収集・蓄積しそれを分析することでワークフローを最適化していくシステムです。
-ローカルの中継サーバー（middleware）がツールからUDPでログを受信し、オンラインサーバーへHTTPで転送、PostgreSQLに保存します。
+ローカルの中継サーバー（middleware）がツールからUDPでログを受信し、オンラインサーバーへHTTPで転送、データベースに保存します。
 
 ## システム構成
 
@@ -13,66 +13,87 @@
            │ UDP + JSON (localhost:59100)
            ▼
 ┌──────────────────────┐
-│ tool_logger_middleware│  ← ローカル中継サーバー (Go)
+│ workflow_lens_middleware│  ← ローカル中継サーバー (Go)
 │ (UDP → HTTP転送)     │
 └──────────┬───────────┘
            │ HTTP POST /logs (バッチ送信)
            ▼
 ┌──────────────────────┐
-│ tool_logger_server   │  ← オンラインサーバー (Go, Cloud Run)
-│ (HTTP → PostgreSQL)  │
+│ workflow_lens_server   │  ← オンラインサーバー (Go)
+│ (HTTP → DB保存)      │
 └──────────┬───────────┘
            │ SQL
            ▼
 ┌──────────────────────┐
-│ PostgreSQL (Supabase)│
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Grafana Cloud        │  ← 可視化
+│ Database             │  ← SQLite / PostgreSQL / MySQL
 └──────────────────────┘
 ```
 
 ## ビルド・起動
 
-### tool_logger_middleware（ローカル中継サーバー）
+### workflow_lens_middleware（ローカル中継サーバー）
 
 ```bash
-cd tool_logger_middleware
+cd workflow_lens_middleware
 
 # ビルド
 go build -o middleware ./cmd/middleware
 
-# デフォルトポート (59100) で起動
+# デフォルトポート (59100) で起動（ログ出力のみ）
 ./middleware
+
+# サーバーへHTTP転送する場合
+WORKFLOW_LENS_SERVER_URL=http://localhost:8080 ./middleware
 
 # ポートを指定して起動
 ./middleware 59200
 ```
 
 起動すると `127.0.0.1:59100` でUDP接続を待ち受けます。
+`WORKFLOW_LENS_SERVER_URL` を設定すると、受信したログをサーバーへバッチ転送します（100件 or 5秒ごと）。
 多重起動防止のため、ポート59099をロックとして使用します。
 
-### tool_logger_server（オンラインサーバー）
+### workflow_lens_server（オンラインサーバー）
 
 ```bash
-cd tool_logger_server
+cd workflow_lens_server
 
-# ビルド
+# ビルド（デフォルト: SQLiteドライバ組み込み）
 go build -o server ./cmd/server
 
-# 起動（DATABASE_URLは必須）
-DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require" ./server
+# SQLiteで起動（ゼロ設定）
+./server
+
+# PostgreSQLで起動
+STORE_DRIVER=postgres DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require" ./server
 
 # ポートを指定して起動（デフォルト: 8080）
-DATABASE_URL="postgres://..." PORT=9000 ./server
+PORT=9000 ./server
+```
+
+#### ビルドタグによるドライバ選択
+
+```bash
+go build ./cmd/server                        # SQLiteのみ（デフォルト）
+go build -tags postgres ./cmd/server         # SQLite + PostgreSQL
+go build -tags "postgres,mysql" ./cmd/server # 全ドライバ
 ```
 
 | 環境変数 | 必須 | デフォルト | 説明 |
 |----------|------|-----------|------|
-| `DATABASE_URL` | Yes | — | PostgreSQL接続文字列 |
-| `PORT` | No | `8080` | HTTPリッスンポート（Cloud Runが自動設定） |
+| `STORE_DRIVER` | No | `sqlite` | データベースドライバ名（`sqlite`, `postgres`, `mysql`） |
+| `DATABASE_URL` | SQLite以外はYes | `workflowlens.db` | データベース接続文字列（DSN） |
+| `PORT` | No | `8080` | HTTPリッスンポート |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | （未設定でOTel無効） | OpenTelemetry OTLPエンドポイント |
+| `OTEL_SERVICE_NAME` | No | `workflow_lens_server` | OTelサービス名 |
+
+#### workflow_lens_middleware 環境変数
+
+| 環境変数 | 必須 | デフォルト | 説明 |
+|----------|------|-----------|------|
+| `WORKFLOW_LENS_SERVER_URL` | No | （未設定でログ出力のみ） | サーバーURL（例: `http://localhost:8080`） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | （未設定でOTel無効） | OpenTelemetry OTLPエンドポイント |
+| `OTEL_SERVICE_NAME` | No | `workflow_lens_middleware` | OTelサービス名 |
 
 ## ログメッセージ仕様
 
@@ -121,14 +142,14 @@ DATABASE_URL="postgres://..." PORT=9000 ./server
 
 ## ツールへの組み込み
 
-ツールへの同伴方法やクライアント実装例は [tool_logger_middleware/README.md](./tool_logger_middleware/README.md) を参照してください。
+ツールへの同伴方法やクライアント実装例は [workflow_lens_middleware/README.md](./workflow_lens_middleware/README.md) を参照してください。
 
 ## 開発
 
-### tool_logger_middleware
+### workflow_lens_middleware
 
 ```bash
-cd tool_logger_middleware
+cd workflow_lens_middleware
 go build ./cmd/middleware    # ビルド
 go run ./cmd/middleware      # 実行（デフォルトポート）
 go run ./cmd/middleware 8080 # ポート指定で実行
@@ -136,19 +157,29 @@ go test ./...               # テスト実行
 go vet ./...                # 静的解析
 ```
 
-### tool_logger_server
+### workflow_lens_server
 
 ```bash
-cd tool_logger_server
+cd workflow_lens_server
 go build ./cmd/server        # ビルド
 go test ./...                # テスト実行
 go vet ./...                 # 静的解析
 ```
 
+### Docker Compose
+
+```bash
+# SQLiteで server のみ起動（デフォルト）
+docker compose up
+
+# PostgreSQL + OTel Collector + Prometheus + Grafana で起動
+docker compose --profile monitoring up
+```
+
 ## 仕様書
 
-- middleware: [tool_logger_middleware/Document/](./tool_logger_middleware/Document/)
-- server: [tool_logger_server/Document/](./tool_logger_server/Document/)
+- middleware: [workflow_lens_middleware/Document/](./workflow_lens_middleware/Document/)
+- server: [workflow_lens_server/Document/](./workflow_lens_server/Document/)
 
 ## セットアップ
 
@@ -159,57 +190,47 @@ go vet ./...                 # 静的解析
 ### 1. リポジトリのクローン
 
 ```bash
-git clone https://github.com/AtsuAtsu0120/ToolLogger.git
-cd ToolLogger
+git clone https://github.com/AtsuAtsu0120/WorkflowLens.git
+cd WorkflowLens
 ```
 
-### 2. PostgreSQL（Supabase）のセットアップ
-
-[Supabase](https://supabase.com/) でプロジェ��トを作成し、SQL Editorで以下を実行してテーブルとインデックスを作成する。
-
-```sql
-CREATE TABLE logs (
-    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tool_name    TEXT        NOT NULL,
-    event_type   TEXT        NOT NULL,
-    timestamp    TIMESTAMPTZ NOT NULL,
-    message      TEXT        NOT NULL,
-    session_id   TEXT,
-    tool_version TEXT,
-    details      JSONB,
-    received_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_logs_tool_name  ON logs (tool_name);
-CREATE INDEX idx_logs_event_type ON logs (event_type);
-CREATE INDEX idx_logs_timestamp  ON logs (timestamp);
-CREATE INDEX idx_logs_session_id ON logs (session_id);
-```
-
-接続文字列はSupabaseダッシュボードの **Settings > Database > Connection string > URI** から取得できる。
-
-### 3. tool_logger_server のデプロイ
+### 2. workflow_lens_server のビルド・起動
 
 ```bash
-cd tool_logger_server
+cd workflow_lens_server
+
+# SQLiteで起動（ゼロ設定、テーブル自動作成）
 go build -o server ./cmd/server
-
-# ローカルで動作確認
-DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require" ./server
+./server
 ```
 
-Cloud Runへのデプロイ時は `DATABASE_URL` をシークレットとして設定する。
-
-### 4. tool_logger_middleware のビルド
+PostgreSQLを使う場合:
 
 ```bash
-cd tool_logger_middleware
+# PostgreSQLドライバ付きでビルド
+go build -tags postgres -o server ./cmd/server
+
+# 起動
+STORE_DRIVER=postgres DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require" ./server
+```
+
+### 3. workflow_lens_middleware のビルド
+
+```bash
+cd workflow_lens_middleware
 go build -o middleware ./cmd/middleware
 ```
 
 ビルドしたバイナリをゲーム開発ツールのプロジェクトに配置する。
-配置例やクライアント実装については [tool_logger_middleware/README.md](./tool_logger_middleware/README.md) を参照。
+配置例やクライアント実装については [workflow_lens_middleware/README.md](./workflow_lens_middleware/README.md) を参照。
 
-### 5. Grafana Cloud の接続（任意）
+### 4. モニタリング（任意）
 
-[Grafana Cloud](https://grafana.com/products/cloud/) でアカウントを作成し、データソースにSupabaseのPostgreSQLを追加する。`logs` テーブルに対してSQLクエリでダッシュボードを構築できる。
+`docker compose --profile monitoring up` で以下が起動する:
+- **PostgreSQL** — ログデータの保存
+- **OTel Collector** — OpenTelemetryテレメトリの収集
+- **Prometheus** — メトリクスの蓄積
+- **Grafana** (http://localhost:3000) — サンプルダッシュボード付き
+
+サーバーは `OTEL_EXPORTER_OTLP_ENDPOINT` が設定されると、トレース・メトリクスをOTLPで送信する。
+Grafana以外のバックエンド（Jaeger, Datadog等）にも `otel-collector/config.yaml` の設定変更で対応可能。
